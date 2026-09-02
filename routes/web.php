@@ -123,6 +123,9 @@ Route::prefix('operations')
     Route::view('/backups', 'admin.operations.backups')
     ->name('backups');
 
+    Route::view('/deployments', 'admin.operations.deployments')
+    ->name('deployments');
+
         /*
         |--------------------------------------------------------------------------
         | Audit Logs

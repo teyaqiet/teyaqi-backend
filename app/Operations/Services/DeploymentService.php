@@ -46,6 +46,11 @@ class DeploymentService
                 'operations.deployments.remote',
                 'origin'
             ),
+
+            'pipeline' => config(
+                'operations.deployments.pipeline',
+                []
+            ),
         ];
     }
 
@@ -72,11 +77,20 @@ class DeploymentService
 
         return [
             'enabled' => $config['enabled'],
+
             'environment' => $config['environment'],
+
             'branch' => $config['branch'],
+
             'path' => $config['path'],
+
             'timeout' => $config['timeout'],
+
             'remote' => $config['remote'],
+
+            'pipeline' => $this->pipelineOverview(
+                $config['pipeline']
+            ),
 
             'latest_deployment' => $latest,
 
@@ -102,6 +116,71 @@ class DeploymentService
                         'running',
                     ]
                 )->count(),
+            ],
+        ];
+    }
+
+    /**
+     * Return enabled/disabled pipeline stages.
+     */
+    protected function pipelineOverview(
+        array $pipeline
+    ): array {
+        return [
+            'composer' => [
+                'enabled' => (bool) data_get(
+                    $pipeline,
+                    'composer.enabled',
+                    true
+                ),
+            ],
+
+            'npm' => [
+                'enabled' => (bool) data_get(
+                    $pipeline,
+                    'npm.enabled',
+                    true
+                ),
+            ],
+
+            'build' => [
+                'enabled' => (bool) data_get(
+                    $pipeline,
+                    'build.enabled',
+                    true
+                ),
+            ],
+
+            'migrations' => [
+                'enabled' => (bool) data_get(
+                    $pipeline,
+                    'migrations.enabled',
+                    true
+                ),
+            ],
+
+            'optimize' => [
+                'enabled' => (bool) data_get(
+                    $pipeline,
+                    'optimize.enabled',
+                    true
+                ),
+            ],
+
+            'queue_restart' => [
+                'enabled' => (bool) data_get(
+                    $pipeline,
+                    'queue_restart.enabled',
+                    true
+                ),
+            ],
+
+            'health_check' => [
+                'enabled' => (bool) data_get(
+                    $pipeline,
+                    'health_check.enabled',
+                    true
+                ),
             ],
         ];
     }
@@ -151,6 +230,8 @@ class DeploymentService
     {
         $config = $this->config();
 
+        $pipeline = $config['pipeline'];
+
         $checks = [];
 
         /*
@@ -183,8 +264,6 @@ class DeploymentService
 
         /*
          * Git repository.
-         *
-         * Only check Git if the directory exists.
          */
         if ($directoryExists) {
             $gitCheck = $this->runCommand(
@@ -230,32 +309,14 @@ class DeploymentService
         /*
          * Git executable.
          */
-        $gitVersion = $this->runCommand(
+        $checks['git'] = $this->executableCheck(
+            'Git',
             [
                 'git',
                 '--version',
             ],
-            $config['path'],
-            30
+            $config['path']
         );
-
-        $checks['git'] = [
-            'status' => $gitVersion->successful()
-                ? 'healthy'
-                : 'failed',
-
-            'message' => $gitVersion->successful()
-                ? trim($gitVersion->output())
-                : 'Git is unavailable.',
-
-            'output' => trim(
-                $gitVersion->output()
-            ),
-
-            'error' => trim(
-                $gitVersion->errorOutput()
-            ),
-        ];
 
         /*
          * Git remote.
@@ -307,6 +368,147 @@ class DeploymentService
         }
 
         /*
+         * Composer.
+         */
+        $checks['composer'] = $this->executableCheck(
+            'Composer',
+            [
+                'composer',
+                '--version',
+            ],
+            $config['path'],
+            (bool) data_get(
+                $pipeline,
+                'composer.enabled',
+                true
+            )
+        );
+
+        /*
+         * Node.js.
+         */
+        $checks['node'] = $this->executableCheck(
+            'Node.js',
+            [
+                'node',
+                '--version',
+            ],
+            $config['path'],
+            (bool) data_get(
+                $pipeline,
+                'npm.enabled',
+                true
+            )
+        );
+
+        /*
+         * NPM.
+         */
+        $checks['npm'] = $this->executableCheck(
+            'NPM',
+            [
+                'npm',
+                '--version',
+            ],
+            $config['path'],
+            (
+                (bool) data_get(
+                    $pipeline,
+                    'npm.enabled',
+                    true
+                )
+                ||
+                (bool) data_get(
+                    $pipeline,
+                    'build.enabled',
+                    true
+                )
+            )
+        );
+
+        /*
+         * PHP.
+         */
+        $checks['php'] = $this->executableCheck(
+            'PHP',
+            [
+                'php',
+                '--version',
+            ],
+            $config['path']
+        );
+
+        /*
+         * Package files.
+         */
+        if (
+            (bool) data_get(
+                $pipeline,
+                'composer.enabled',
+                true
+            )
+        ) {
+            $composerLockExists = is_file(
+                $config['path'] . DIRECTORY_SEPARATOR . 'composer.lock'
+            );
+
+            $checks['composer_lock'] = [
+                'status' => $composerLockExists
+                    ? 'healthy'
+                    : 'failed',
+
+                'message' => $composerLockExists
+                    ? 'composer.lock exists.'
+                    : 'composer.lock was not found.',
+            ];
+        } else {
+            $checks['composer_lock'] = [
+                'status' => 'skipped',
+
+                'message' =>
+                    'Composer dependency installation is disabled.',
+            ];
+        }
+
+        /*
+         * NPM lock file.
+         */
+        if (
+            (bool) data_get(
+                $pipeline,
+                'npm.enabled',
+                true
+            )
+            ||
+            (bool) data_get(
+                $pipeline,
+                'build.enabled',
+                true
+            )
+        ) {
+            $packageLockExists = is_file(
+                $config['path'] . DIRECTORY_SEPARATOR . 'package-lock.json'
+            );
+
+            $checks['npm_lock'] = [
+                'status' => $packageLockExists
+                    ? 'healthy'
+                    : 'failed',
+
+                'message' => $packageLockExists
+                    ? 'package-lock.json exists.'
+                    : 'package-lock.json was not found.',
+            ];
+        } else {
+            $checks['npm_lock'] = [
+                'status' => 'skipped',
+
+                'message' =>
+                    'NPM dependency installation and build are disabled.',
+            ];
+        }
+
+        /*
          * Another deployment active?
          */
         $activeDeployment = OperationDeployment::query()
@@ -330,12 +532,22 @@ class DeploymentService
         ];
 
         /*
-         * Overall preflight result.
+         * Overall result.
+         *
+         * "skipped" is intentionally considered healthy because
+         * disabled pipeline stages are valid configuration.
          */
         $healthy = collect($checks)
             ->every(
                 fn ($check) =>
-                    $check['status'] === 'healthy'
+                    in_array(
+                        $check['status'],
+                        [
+                            'healthy',
+                            'skipped',
+                        ],
+                        true
+                    )
             );
 
         return [
@@ -351,10 +563,6 @@ class DeploymentService
 
     /**
      * Create a pending deployment and queue execution.
-     *
-     * Deployment creation itself is protected by an atomic lock
-     * so two administrators cannot create competing deployments
-     * at exactly the same time.
      */
     public function createDeployment(
         array $data = []
@@ -369,9 +577,6 @@ class DeploymentService
 
         /*
          * Prevent concurrent deployment creation.
-         *
-         * We don't hold this lock during the actual deployment.
-         * The execution lock below handles that.
          */
         $lock = cache()->lock(
             'teyaqi:operations:deployment:create',
@@ -407,6 +612,8 @@ class DeploymentService
              */
             $branch = $data['branch']
                 ?? $config['branch'];
+
+            $branch = trim($branch);
 
             /*
              * Validate deployment branch.
@@ -475,7 +682,12 @@ class DeploymentService
 
                 'metadata' => [
                     'remote' => $config['remote'],
+
                     'path' => $config['path'],
+
+                    'pipeline' => $this->pipelineOverview(
+                        $config['pipeline']
+                    ),
                 ],
             ]);
 
@@ -495,8 +707,7 @@ class DeploymentService
     /**
      * Execute a deployment.
      *
-     * A global atomic lock guarantees that only one deployment
-     * can modify the deployment directory at a time.
+     * The deployment lock is held for the entire pipeline.
      */
     public function execute(
         OperationDeployment $deployment
@@ -504,8 +715,9 @@ class DeploymentService
         $config = $this->config();
 
         /*
-         * Keep the lock for longer than the maximum deployment
-         * execution time so it cannot expire during a deployment.
+         * Deployment timeout.
+         *
+         * The lock must survive the complete deployment.
          */
         $lockSeconds = max(
             $config['timeout'] + 60,
@@ -518,23 +730,18 @@ class DeploymentService
         );
 
         /*
-         * Do not wait for another deployment.
-         *
-         * The queue worker should fail this job immediately and
-         * the deployment will remain pending only if we don't
-         * handle this carefully.
+         * Wait for another deployment instead of immediately
+         * failing the queued job.
          */
-        if (! $lock->get()) {
+        if (! $lock->block($lockSeconds)) {
             throw new RuntimeException(
-                'Another deployment is currently running. Please wait until it finishes.'
+                'Unable to acquire the deployment lock.'
             );
         }
 
         try {
             /*
-             * Re-fetch the deployment after acquiring the lock.
-             *
-             * This prevents stale model data from being used.
+             * Always reload the latest database state.
              */
             $deployment = OperationDeployment::find(
                 $deployment->id
@@ -554,7 +761,10 @@ class DeploymentService
             }
 
             /*
-             * Double-check active deployments.
+             * Make sure no other deployment is active.
+             *
+             * Because this code is protected by the same global
+             * deployment lock, this check is now serialized.
              */
             $anotherDeploymentRunning = OperationDeployment::query()
                 ->whereIn(
@@ -594,13 +804,15 @@ class DeploymentService
                 'error' => null,
             ]);
 
+            $deployment = $deployment->fresh();
+
             /*
              * Audit execution start.
              */
             $this->auditDeployment(
                 $deployment,
                 'deployment.started',
-                'Deployment execution started.',
+                'Deployment pipeline started.',
                 'success'
             );
 
@@ -608,9 +820,11 @@ class DeploymentService
 
             try {
                 /*
-                 * Step 1:
-                 * Verify Git repository.
+                 |--------------------------------------------------------------------------
+                 | Git Pipeline
+                 |--------------------------------------------------------------------------
                  */
+
                 $this->runDeploymentStep(
                     $output,
                     $deployment,
@@ -620,13 +834,10 @@ class DeploymentService
                         'rev-parse',
                         '--is-inside-work-tree',
                     ],
-                    $config['path']
+                    $config['path'],
+                    30
                 );
 
-                /*
-                 * Step 2:
-                 * Fetch remote changes.
-                 */
                 $this->runDeploymentStep(
                     $output,
                     $deployment,
@@ -637,13 +848,10 @@ class DeploymentService
                         '--all',
                         '--prune',
                     ],
-                    $config['path']
+                    $config['path'],
+                    $config['timeout']
                 );
 
-                /*
-                 * Step 3:
-                 * Checkout deployment branch.
-                 */
                 $this->runDeploymentStep(
                     $output,
                     $deployment,
@@ -653,13 +861,10 @@ class DeploymentService
                         'checkout',
                         $deployment->branch,
                     ],
-                    $config['path']
+                    $config['path'],
+                    30
                 );
 
-                /*
-                 * Step 4:
-                 * Pull latest code.
-                 */
                 $this->runDeploymentStep(
                     $output,
                     $deployment,
@@ -671,13 +876,217 @@ class DeploymentService
                         $config['remote'],
                         $deployment->branch,
                     ],
-                    $config['path']
+                    $config['path'],
+                    $config['timeout']
                 );
 
                 /*
-                 * Step 5:
-                 * Refresh deployed commit hash.
+                 |--------------------------------------------------------------------------
+                 | Composer
+                 |--------------------------------------------------------------------------
                  */
+
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.composer.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Install Composer dependencies',
+                        'composer',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Install Composer dependencies',
+                        'Composer pipeline stage is disabled.'
+                    );
+                }
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | NPM
+                 |--------------------------------------------------------------------------
+                 */
+
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.npm.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Install NPM dependencies',
+                        'npm',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Install NPM dependencies',
+                        'NPM pipeline stage is disabled.'
+                    );
+                }
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | Next.js build
+                 |--------------------------------------------------------------------------
+                 */
+
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.build.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Build frontend application',
+                        'build',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Build frontend application',
+                        'Frontend build stage is disabled.'
+                    );
+                }
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | Database migrations
+                 |--------------------------------------------------------------------------
+                 */
+
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.migrations.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Run database migrations',
+                        'migrations',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Run database migrations',
+                        'Database migration stage is disabled.'
+                    );
+                }
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | Laravel optimization
+                 |--------------------------------------------------------------------------
+                 */
+
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.optimize.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Optimize Laravel application',
+                        'optimize',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Optimize Laravel application',
+                        'Laravel optimization stage is disabled.'
+                    );
+                }
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | Queue restart
+                 |--------------------------------------------------------------------------
+                 */
+
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.queue_restart.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Restart queue workers',
+                        'queue_restart',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Restart queue workers',
+                        'Queue restart stage is disabled.'
+                    );
+                }
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | Final health check
+                 |--------------------------------------------------------------------------
+                 */
+
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.health_check.enabled',
+                        true
+                    )
+                ) {
+                    $this->runHealthCheck(
+                        $output,
+                        $deployment,
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Application health check',
+                        'Health check stage is disabled.'
+                    );
+                }
+
+                /*
+                 |--------------------------------------------------------------------------
+                 | Deployment completed
+                 |--------------------------------------------------------------------------
+                 */
+
                 $commit = $this->runCommand(
                     [
                         'git',
@@ -696,10 +1105,6 @@ class DeploymentService
                     ]);
                 }
 
-                /*
-                 * Step 6:
-                 * Refresh deployed commit message.
-                 */
                 $message = $this->runCommand(
                     [
                         'git',
@@ -719,9 +1124,6 @@ class DeploymentService
                     ]);
                 }
 
-                /*
-                 * Deployment completed.
-                 */
                 $completedAt = now();
 
                 $deployment->update([
@@ -748,7 +1150,7 @@ class DeploymentService
                 $this->auditDeployment(
                     $deployment,
                     'deployment.completed',
-                    'Deployment completed successfully.',
+                    'Deployment pipeline completed successfully.',
                     'success'
                 );
 
@@ -784,17 +1186,19 @@ class DeploymentService
                 $this->auditDeployment(
                     $deployment,
                     'deployment.failed',
-                    'Deployment execution failed.',
+                    'Deployment pipeline failed.',
                     'failed',
                     [
-                        'error' => $exception->getMessage(),
+                        'error' =>
+                            $exception->getMessage(),
                     ]
                 );
 
                 Log::error(
                     'Operations deployment failed.',
                     [
-                        'deployment_id' => $deployment->id,
+                        'deployment_id' =>
+                            $deployment->id,
 
                         'environment' =>
                             $deployment->environment,
@@ -802,7 +1206,8 @@ class DeploymentService
                         'branch' =>
                             $deployment->branch,
 
-                        'exception' => $exception,
+                        'exception' =>
+                            $exception,
                     ]
                 );
 
@@ -810,17 +1215,219 @@ class DeploymentService
             }
         } finally {
             /*
-             * Always release the execution lock.
+             * Always release the deployment lock.
              */
             $lock->release();
         }
     }
 
     /**
+     * Execute a configured pipeline stage.
+     */
+    protected function runConfiguredPipelineStep(
+        array &$output,
+        OperationDeployment $deployment,
+        string $label,
+        string $stage,
+        array $config
+    ): void {
+        $pipeline = $config['pipeline'];
+
+        $command = data_get(
+            $pipeline,
+            "{$stage}.command"
+        );
+
+        $timeout = (int) data_get(
+            $pipeline,
+            "{$stage}.timeout",
+            $config['timeout']
+        );
+
+        if (! is_array($command) || empty($command)) {
+            throw new RuntimeException(
+                "Deployment pipeline stage [{$stage}] has no valid command configured."
+            );
+        }
+
+        $this->runDeploymentStep(
+            $output,
+            $deployment,
+            $label,
+            $command,
+            $config['path'],
+            $timeout
+        );
+    }
+
+    /**
+     * Run the final application health check.
+     */
+    protected function runHealthCheck(
+        array &$output,
+        OperationDeployment $deployment,
+        array $config
+    ): void {
+        $label = 'Application health check';
+
+        $output[] =
+            '[' .
+            now()->format('Y-m-d H:i:s') .
+            '] ' .
+            $label;
+
+        $started = microtime(true);
+
+        try {
+            $health = app(
+                DatabaseService::class
+            )->overview();
+
+            $latency = round(
+                (microtime(true) - $started) * 1000,
+                2
+            );
+
+            if (
+                ($health['status'] ?? null)
+                !== 'healthy'
+            ) {
+                $output[] =
+                    'Database health check failed.';
+
+                $output[] = json_encode(
+                    $health,
+                    JSON_PRETTY_PRINT |
+                    JSON_UNESCAPED_SLASHES
+                );
+
+                $deployment->update([
+                    'output' => implode(
+                        PHP_EOL . PHP_EOL,
+                        $output
+                    ),
+                ]);
+
+                throw new RuntimeException(
+                    'Application health check failed.'
+                );
+            }
+
+            $output[] =
+                'Database health check passed.';
+
+            $output[] =
+                'Latency: ' .
+                $latency .
+                ' ms';
+
+            $output[] =
+                'Database: ' .
+                ($health['database'] ?? 'unknown');
+
+            $output[] =
+                'Server version: ' .
+                ($health['server_version'] ?? 'unknown');
+
+            $deployment->update([
+                'output' => implode(
+                    PHP_EOL . PHP_EOL,
+                    $output
+                ),
+            ]);
+
+        } catch (Throwable $exception) {
+            $deployment->update([
+                'output' => implode(
+                    PHP_EOL . PHP_EOL,
+                    $output
+                ),
+            ]);
+
+            throw new RuntimeException(
+                "{$label} failed: " .
+                $exception->getMessage(),
+                0,
+                $exception
+            );
+        }
+    }
+
+    /**
+     * Record a skipped deployment step.
+     */
+    protected function recordSkippedStep(
+        array &$output,
+        OperationDeployment $deployment,
+        string $label,
+        string $reason
+    ): void {
+        $output[] =
+            '[' .
+            now()->format('Y-m-d H:i:s') .
+            '] ' .
+            $label .
+            ' [SKIPPED]';
+
+        $output[] = $reason;
+
+        $deployment->update([
+            'output' => implode(
+                PHP_EOL . PHP_EOL,
+                $output
+            ),
+        ]);
+    }
+
+    /**
+     * Check whether an executable is available.
+     */
+    protected function executableCheck(
+        string $name,
+        array $command,
+        string $path,
+        bool $enabled = true
+    ): array {
+        if (! $enabled) {
+            return [
+                'status' => 'skipped',
+
+                'message' =>
+                    "{$name} check is disabled.",
+
+                'output' => '',
+
+                'error' => '',
+            ];
+        }
+
+        $result = $this->runCommand(
+            $command,
+            $path,
+            30
+        );
+
+        return [
+            'status' => $result->successful()
+                ? 'healthy'
+                : 'failed',
+
+            'message' => $result->successful()
+                ? trim($result->output())
+                : "{$name} is unavailable.",
+
+            'output' => trim(
+                $result->output()
+            ),
+
+            'error' => trim(
+                $result->errorOutput()
+            ),
+        ];
+    }
+
+    /**
      * Validate a deployment branch.
-     *
-     * Prevents malformed Git references and command-like values
-     * from entering the deployment pipeline.
      */
     protected function validateBranch(
         string $branch
@@ -834,8 +1441,7 @@ class DeploymentService
         }
 
         /*
-         * Reject values that begin with a dash because Git may
-         * interpret them as command options.
+         * Git option-like value.
          */
         if (str_starts_with($branch, '-')) {
             throw new RuntimeException(
@@ -844,7 +1450,7 @@ class DeploymentService
         }
 
         /*
-         * Reject whitespace and shell/control characters.
+         * Whitespace/control characters.
          */
         if (
             preg_match(
@@ -858,7 +1464,7 @@ class DeploymentService
         }
 
         /*
-         * Only allow normal Git branch characters.
+         * Normal Git branch characters only.
          */
         if (
             ! preg_match(
@@ -936,7 +1542,8 @@ class DeploymentService
         OperationDeployment $deployment,
         string $label,
         array $command,
-        string $path
+        string $path,
+        int $timeout
     ): void {
         /*
          * Record step start.
@@ -953,10 +1560,7 @@ class DeploymentService
         $result = $this->runCommand(
             $command,
             $path,
-            (int) config(
-                'operations.deployments.timeout',
-                600
-            )
+            $timeout
         );
 
         /*
