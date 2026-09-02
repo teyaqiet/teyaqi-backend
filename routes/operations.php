@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\Operations\CacheController;
 use App\Http\Controllers\Admin\Operations\DatabaseController;
 use App\Http\Controllers\Admin\Operations\BackupController;
 use App\Http\Controllers\Admin\Operations\BackupDiagnosticController;
+use App\Http\Controllers\Admin\Operations\DeploymentController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware([
@@ -219,4 +220,43 @@ Route::middleware([
                     'delete',
                 ])->name('delete');
             });
+
+       /*
+|--------------------------------------------------------------------------
+| Deployment Management
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('deployments')
+    ->name('operations.deployments.')
+    ->group(function () {
+
+        Route::get('/', [
+            DeploymentController::class,
+            'overview',
+        ])->name('overview');
+
+        Route::get('/history', [
+            DeploymentController::class,
+            'index',
+        ])->name('index');
+
+        Route::get('/preflight', [
+            DeploymentController::class,
+            'preflight',
+        ])->name('preflight');
+
+        Route::get('/{id}', [
+            DeploymentController::class,
+            'show',
+        ])
+            ->whereNumber('id')
+            ->name('show');
+
+        Route::post('/create', [
+            DeploymentController::class,
+            'deploy',
+        ])->name('create');
+    });
+
     });

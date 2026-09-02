@@ -100,7 +100,7 @@ return [
 
     'branch' => env(
         'OPERATIONS_DEPLOYMENT_BRANCH',
-        'staging'
+        'main'
     ),
 
     'path' => env(
@@ -111,6 +111,11 @@ return [
     'timeout' => (int) env(
         'OPERATIONS_DEPLOYMENT_TIMEOUT',
         600
+    ),
+
+    'remote' => env(
+        'OPERATIONS_DEPLOYMENT_REMOTE',
+        'origin'
     ),
 ],
 
