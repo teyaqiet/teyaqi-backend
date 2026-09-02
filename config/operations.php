@@ -91,6 +91,7 @@ return [
 ],
 
 'deployments' => [
+
     'enabled' => env(
         'OPERATIONS_DEPLOYMENTS_ENABLED',
         true
@@ -120,6 +121,36 @@ return [
         'OPERATIONS_DEPLOYMENT_REMOTE',
         'origin'
     ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Executables
+    |--------------------------------------------------------------------------
+    */
+
+    'binaries' => [
+        'composer' => env(
+            'OPERATIONS_COMPOSER_BINARY',
+            'composer'
+        ),
+
+        'node' => env(
+            'OPERATIONS_NODE_BINARY',
+            'node'
+        ),
+
+        'npm' => env(
+            'OPERATIONS_NPM_BINARY',
+            'npm'
+        ),
+
+        'php' => env(
+            'OPERATIONS_PHP_BINARY',
+            'php'
+        ),
+    ],
+
+
 
     /*
     |--------------------------------------------------------------------------
@@ -237,6 +268,8 @@ return [
                 60
             ),
         ],
+
+        
 
         'health_check' => [
             'enabled' => env(

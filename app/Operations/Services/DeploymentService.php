@@ -47,6 +47,38 @@ class DeploymentService
                 'origin'
             ),
 
+            /*
+             * Deployment executables.
+             *
+             * These can be configured in .env:
+             *
+             * OPERATIONS_COMPOSER_BINARY
+             * OPERATIONS_NODE_BINARY
+             * OPERATIONS_NPM_BINARY
+             * OPERATIONS_PHP_BINARY
+             */
+            'binaries' => [
+                'composer' => config(
+                    'operations.deployments.binaries.composer',
+                    'composer'
+                ),
+
+                'node' => config(
+                    'operations.deployments.binaries.node',
+                    'node'
+                ),
+
+                'npm' => config(
+                    'operations.deployments.binaries.npm',
+                    'npm'
+                ),
+
+                'php' => config(
+                    'operations.deployments.binaries.php',
+                    'php'
+                ),
+            ],
+
             'pipeline' => config(
                 'operations.deployments.pipeline',
                 []
@@ -373,7 +405,7 @@ class DeploymentService
         $checks['composer'] = $this->executableCheck(
             'Composer',
             [
-                'composer',
+                $config['binaries']['composer'],
                 '--version',
             ],
             $config['path'],
@@ -390,14 +422,22 @@ class DeploymentService
         $checks['node'] = $this->executableCheck(
             'Node.js',
             [
-                'node',
+                $config['binaries']['node'],
                 '--version',
             ],
             $config['path'],
-            (bool) data_get(
-                $pipeline,
-                'npm.enabled',
-                true
+            (
+                (bool) data_get(
+                    $pipeline,
+                    'npm.enabled',
+                    true
+                )
+                ||
+                (bool) data_get(
+                    $pipeline,
+                    'build.enabled',
+                    true
+                )
             )
         );
 
@@ -407,7 +447,7 @@ class DeploymentService
         $checks['npm'] = $this->executableCheck(
             'NPM',
             [
-                'npm',
+                $config['binaries']['npm'],
                 '--version',
             ],
             $config['path'],
@@ -432,7 +472,7 @@ class DeploymentService
         $checks['php'] = $this->executableCheck(
             'PHP',
             [
-                'php',
+                $config['binaries']['php'],
                 '--version',
             ],
             $config['path']
@@ -449,7 +489,9 @@ class DeploymentService
             )
         ) {
             $composerLockExists = is_file(
-                $config['path'] . DIRECTORY_SEPARATOR . 'composer.lock'
+                $config['path'] .
+                DIRECTORY_SEPARATOR .
+                'composer.lock'
             );
 
             $checks['composer_lock'] = [
@@ -487,7 +529,9 @@ class DeploymentService
             )
         ) {
             $packageLockExists = is_file(
-                $config['path'] . DIRECTORY_SEPARATOR . 'package-lock.json'
+                $config['path'] .
+                DIRECTORY_SEPARATOR .
+                'package-lock.json'
             );
 
             $checks['npm_lock'] = [
@@ -622,6 +666,10 @@ class DeploymentService
 
             /*
              * Get current local commit.
+             *
+             * This is only used as the commit state before
+             * deployment. The actual deployed commit is refreshed
+             * after git fetch/pull inside execute().
              */
             $currentCommit = $this->runCommand(
                 [
@@ -684,6 +732,20 @@ class DeploymentService
                     'remote' => $config['remote'],
 
                     'path' => $config['path'],
+
+                    'binaries' => [
+                        'composer' =>
+                            $config['binaries']['composer'],
+
+                        'node' =>
+                            $config['binaries']['node'],
+
+                        'npm' =>
+                            $config['binaries']['npm'],
+
+                        'php' =>
+                            $config['binaries']['php'],
+                    ],
 
                     'pipeline' => $this->pipelineOverview(
                         $config['pipeline']
@@ -764,7 +826,7 @@ class DeploymentService
              * Make sure no other deployment is active.
              *
              * Because this code is protected by the same global
-             * deployment lock, this check is now serialized.
+             * deployment lock, this check is serialized.
              */
             $anotherDeploymentRunning = OperationDeployment::query()
                 ->whereIn(
@@ -879,6 +941,80 @@ class DeploymentService
                     $config['path'],
                     $config['timeout']
                 );
+
+                /*
+                 * Record the ACTUAL commit after pull.
+                 *
+                 * This is the commit that the deployment will
+                 * actually operate on.
+                 */
+                $deployedCommit = $this->runCommand(
+                    [
+                        'git',
+                        'rev-parse',
+                        'HEAD',
+                    ],
+                    $config['path'],
+                    30
+                );
+
+                if (! $deployedCommit->successful()) {
+                    throw new RuntimeException(
+                        'Unable to determine deployed Git commit: ' .
+                        trim(
+                            $deployedCommit->errorOutput()
+                        )
+                    );
+                }
+
+                $deployedCommitHash = trim(
+                    $deployedCommit->output()
+                );
+
+                $deployedMessage = $this->runCommand(
+                    [
+                        'git',
+                        'log',
+                        '-1',
+                        '--pretty=%s',
+                    ],
+                    $config['path'],
+                    30
+                );
+
+                $deployment->update([
+                    'commit_hash' =>
+                        $deployedCommitHash ?: null,
+
+                    'commit_message' =>
+                        $deployedMessage->successful()
+                            ? trim($deployedMessage->output())
+                            : null,
+                ]);
+
+                $output[] =
+                    '[' .
+                    now()->format('Y-m-d H:i:s') .
+                    '] Deployment commit';
+
+                $output[] =
+                    'Commit: ' .
+                    ($deployedCommitHash ?: 'unknown');
+
+                $output[] =
+                    'Message: ' .
+                    (
+                        $deployedMessage->successful()
+                            ? trim($deployedMessage->output())
+                            : 'unknown'
+                    );
+
+                $deployment->update([
+                    'output' => implode(
+                        PHP_EOL . PHP_EOL,
+                        $output
+                    ),
+                ]);
 
                 /*
                  |--------------------------------------------------------------------------
@@ -1223,6 +1359,10 @@ class DeploymentService
 
     /**
      * Execute a configured pipeline stage.
+     *
+     * Special handling is applied to Composer, NPM, build,
+     * migrations, optimize, and queue restart so their configured
+     * executable is used.
      */
     protected function runConfiguredPipelineStep(
         array &$output,
@@ -1250,6 +1390,16 @@ class DeploymentService
             );
         }
 
+        /*
+         * Replace the executable configured in config/operations.php
+         * with the explicit binary configured for the environment.
+         */
+        $command = $this->resolvePipelineCommand(
+            $stage,
+            $command,
+            $config
+        );
+
         $this->runDeploymentStep(
             $output,
             $deployment,
@@ -1258,6 +1408,54 @@ class DeploymentService
             $config['path'],
             $timeout
         );
+    }
+
+    /**
+     * Resolve a configured pipeline command.
+     *
+     * This keeps the command arguments from config while replacing
+     * executable names with explicit configured binaries.
+     */
+    protected function resolvePipelineCommand(
+        string $stage,
+        array $command,
+        array $config
+    ): array {
+        $binaries = $config['binaries'];
+
+        return match ($stage) {
+            'composer' => [
+                $binaries['composer'],
+                ...array_slice($command, 1),
+            ],
+
+            'npm' => [
+                $binaries['npm'],
+                ...array_slice($command, 1),
+            ],
+
+            'build' => [
+                $binaries['npm'],
+                ...array_slice($command, 1),
+            ],
+
+            'migrations' => [
+                $binaries['php'],
+                ...array_slice($command, 1),
+            ],
+
+            'optimize' => [
+                $binaries['php'],
+                ...array_slice($command, 1),
+            ],
+
+            'queue_restart' => [
+                $binaries['php'],
+                ...array_slice($command, 1),
+            ],
+
+            default => $command,
+        };
     }
 
     /**
