@@ -1151,10 +1151,11 @@ class DeploymentService
 
                 $completedAt = now();
 
-                $duration =
-                    $completedAt->diffInSeconds(
-                        $startedAt
-                    );
+                $duration = max(
+                    0,
+                    $completedAt->getTimestamp() -
+                    $startedAt->getTimestamp()
+                );
 
                 $deployment->update([
                     'status' => 'completed',
@@ -1173,10 +1174,11 @@ class DeploymentService
             } catch (Throwable $e) {
                 $failedAt = now();
 
-                $duration =
-                    $failedAt->diffInSeconds(
-                        $startedAt
-                    );
+$duration = max(
+    0,
+    $failedAt->getTimestamp() -
+    $startedAt->getTimestamp()
+);
 
                 $deployment->update([
                     'status' => 'failed',

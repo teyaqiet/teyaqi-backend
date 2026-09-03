@@ -67,8 +67,12 @@ class ExecuteDeploymentJob implements ShouldQueue
             'error' => $exception->getMessage(),
             'completed_at' => now(),
             'duration_seconds' => $deployment->started_at
-                ? $deployment->started_at->diffInSeconds(now())
-                : null,
+    ? max(
+        0,
+        now()->getTimestamp() -
+        $deployment->started_at->getTimestamp()
+    )
+    : null,
         ]);
     }
 }
