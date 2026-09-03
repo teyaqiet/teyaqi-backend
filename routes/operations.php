@@ -222,41 +222,43 @@ Route::middleware([
             });
 
        /*
-|--------------------------------------------------------------------------
-| Deployment Management
-|--------------------------------------------------------------------------
-*/
+        /*
+        |--------------------------------------------------------------------------
+        | Deployment Management
+        |--------------------------------------------------------------------------
+        */
 
-Route::prefix('deployments')
-    ->name('operations.deployments.')
-    ->group(function () {
+        Route::prefix('deployments')
+            ->name('operations.deployments.')
+            ->group(function () {
 
-        Route::get('/', [
-            DeploymentController::class,
-            'overview',
-        ])->name('overview');
+                Route::get('/', [
+                    DeploymentController::class,
+                    'overview',
+                ])->name('overview');
 
-        Route::get('/history', [
-            DeploymentController::class,
-            'index',
-        ])->name('index');
+                Route::get('/history', [
+                    DeploymentController::class,
+                    'index',
+                ])->name('index');
 
-        Route::get('/preflight', [
-            DeploymentController::class,
-            'preflight',
-        ])->name('preflight');
+                Route::get('/preflight', [
+                    DeploymentController::class,
+                    'preflight',
+                ])->name('preflight');
 
-        Route::get('/{id}', [
-            DeploymentController::class,
-            'show',
-        ])
-            ->whereNumber('id')
-            ->name('show');
+                Route::get('/{id}', [
+                    DeploymentController::class,
+                    'show',
+                ])
+                    ->whereNumber('id')
+                    ->name('show');
 
-        Route::post('/create', [
-            DeploymentController::class,
-            'deploy',
-        ])->name('create');
-    });
+                Route::post('/create', [
+                    DeploymentController::class,
+                    'deploy',
+                ])->name('create');
+            });
+    
 
     });
