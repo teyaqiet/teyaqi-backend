@@ -828,4 +828,29 @@ Route::prefix('operations')
             )->name('test-automation-trigger');
 
         });
+
+
+        Route::get('/debug/npm', function () {
+    $node = 'C:/Program Files/nodejs/node.exe';
+
+$process = new \Symfony\Component\Process\Process([
+    $node,
+    '-e',
+    'console.log(process.version); console.log(require("crypto").randomBytes(16).toString("hex"));',
+]);
+
+$process->setTimeout(30);
+
+$process->run();
+
+return response()->json([
+    'command' => $process->getCommandLine(),
+    'successful' => $process->isSuccessful(),
+    'exit_code' => $process->getExitCode(),
+    'output' => $process->getOutput(),
+    'error' => $process->getErrorOutput(),
+]);
+});
+
+
     });

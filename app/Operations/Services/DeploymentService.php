@@ -61,9 +61,31 @@ class DeploymentService
                     'node'
                 ),
 
+                /*
+                 * Kept for backwards compatibility/reference.
+                 *
+                 * NPM deployment commands should NOT execute npm.cmd
+                 * directly on Windows.
+                 */
                 'npm' => config(
                     'operations.deployments.binaries.npm',
                     'npm'
+                ),
+
+                /*
+                 * Direct npm CLI entry point.
+                 *
+                 * Instead of:
+                 *
+                 * npm.cmd -> cmd.exe -> node.exe
+                 *
+                 * we use:
+                 *
+                 * node.exe -> npm-cli.js
+                 */
+                'npm_cli' => config(
+                    'operations.deployments.binaries.npm_cli',
+                    'C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js'
                 ),
 
                 'php' => config(
@@ -412,6 +434,19 @@ class DeploymentService
         /*
          * Node.js.
          */
+        $nodeRequired =
+            (bool) data_get(
+                $pipeline,
+                'npm.enabled',
+                true
+            )
+            ||
+            (bool) data_get(
+                $pipeline,
+                'build.enabled',
+                true
+            );
+
         $checks['node'] = $this->executableCheck(
             'Node.js',
             [
@@ -419,44 +454,35 @@ class DeploymentService
                 '--version',
             ],
             $config['path'],
-            (
-                (bool) data_get(
-                    $pipeline,
-                    'npm.enabled',
-                    true
-                )
-                ||
-                (bool) data_get(
-                    $pipeline,
-                    'build.enabled',
-                    true
-                )
-            )
+            $nodeRequired
         );
 
         /*
          * NPM.
+         *
+         * IMPORTANT:
+         *
+         * Do NOT execute npm.cmd here.
+         *
+         * On Windows under Apache/PHP, npm.cmd can cause:
+         *
+         * npm.cmd -> cmd.exe -> node.exe
+         *
+         * to fail during Node crypto initialization.
+         *
+         * We therefore execute:
+         *
+         * node.exe -> npm-cli.js
          */
         $checks['npm'] = $this->executableCheck(
             'NPM',
             [
-                $config['binaries']['npm'],
+                $config['binaries']['node'],
+                $config['binaries']['npm_cli'],
                 '--version',
             ],
             $config['path'],
-            (
-                (bool) data_get(
-                    $pipeline,
-                    'npm.enabled',
-                    true
-                )
-                ||
-                (bool) data_get(
-                    $pipeline,
-                    'build.enabled',
-                    true
-                )
-            )
+            $nodeRequired
         );
 
         /*
@@ -714,6 +740,9 @@ class DeploymentService
                         'npm' =>
                             $config['binaries']['npm'],
 
+                        'npm_cli' =>
+                            $config['binaries']['npm_cli'],
+
                         'php' =>
                             $config['binaries']['php'],
                     ],
@@ -821,7 +850,7 @@ class DeploymentService
 
             try {
                 /*
-                 * Git operations
+                 * Git operations.
                  */
                 $this->runDeploymentStep(
                     $output,
@@ -894,11 +923,15 @@ class DeploymentService
                 if (! $deployedCommit->successful()) {
                     throw new RuntimeException(
                         'Unable to determine deployed Git commit: ' .
-                        trim($deployedCommit->errorOutput())
+                        trim(
+                            $deployedCommit->errorOutput()
+                        )
                     );
                 }
 
-                $deployedCommitHash = trim($deployedCommit->output());
+                $deployedCommitHash = trim(
+                    $deployedCommit->output()
+                );
 
                 $deployedMessage = $this->runCommand(
                     [
@@ -919,22 +952,38 @@ class DeploymentService
                         : null,
                 ]);
 
-                $output[] = '[' . now()->format('Y-m-d H:i:s') . '] Deployment commit';
-                $output[] = 'Commit: ' . ($deployedCommitHash ?: 'unknown');
-                $output[] = 'Message: ' . (
-                    $deployedMessage->successful()
-                        ? trim($deployedMessage->output())
-                        : 'unknown'
-                );
+                $output[] =
+                    '[' . now()->format('Y-m-d H:i:s') . '] Deployment commit';
+
+                $output[] =
+                    'Commit: ' .
+                    ($deployedCommitHash ?: 'unknown');
+
+                $output[] =
+                    'Message: ' .
+                    (
+                        $deployedMessage->successful()
+                            ? trim($deployedMessage->output())
+                            : 'unknown'
+                    );
 
                 $deployment->update([
-                    'output' => implode(PHP_EOL . PHP_EOL, $output),
+                    'output' => implode(
+                        PHP_EOL . PHP_EOL,
+                        $output
+                    ),
                 ]);
 
                 /*
-                 * Composer Pipeline Stage
+                 * Composer Pipeline Stage.
                  */
-                if ((bool) data_get($config, 'pipeline.composer.enabled', true)) {
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.composer.enabled',
+                        true
+                    )
+                ) {
                     $this->runConfiguredPipelineStep(
                         $output,
                         $deployment,
@@ -952,9 +1001,15 @@ class DeploymentService
                 }
 
                 /*
-                 * NPM Pipeline Stage
+                 * NPM Pipeline Stage.
                  */
-                if ((bool) data_get($config, 'pipeline.npm.enabled', true)) {
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.npm.enabled',
+                        true
+                    )
+                ) {
                     $this->runConfiguredPipelineStep(
                         $output,
                         $deployment,
@@ -972,9 +1027,15 @@ class DeploymentService
                 }
 
                 /*
-                 * Assets Build Stage
+                 * Assets Build Stage.
                  */
-                if ((bool) data_get($config, 'pipeline.build.enabled', true)) {
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.build.enabled',
+                        true
+                    )
+                ) {
                     $this->runConfiguredPipelineStep(
                         $output,
                         $deployment,
@@ -992,9 +1053,15 @@ class DeploymentService
                 }
 
                 /*
-                 * Database Migrations Stage
+                 * Database Migrations Stage.
                  */
-                if ((bool) data_get($config, 'pipeline.migrations.enabled', true)) {
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.migrations.enabled',
+                        true
+                    )
+                ) {
                     $this->runConfiguredPipelineStep(
                         $output,
                         $deployment,
@@ -1012,9 +1079,15 @@ class DeploymentService
                 }
 
                 /*
-                 * Cache & Framework Optimization Stage
+                 * Cache & Framework Optimization Stage.
                  */
-                if ((bool) data_get($config, 'pipeline.optimize.enabled', true)) {
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.optimize.enabled',
+                        true
+                    )
+                ) {
                     $this->runConfiguredPipelineStep(
                         $output,
                         $deployment,
@@ -1032,9 +1105,15 @@ class DeploymentService
                 }
 
                 /*
-                 * Queue Restart Stage
+                 * Queue Restart Stage.
                  */
-                if ((bool) data_get($config, 'pipeline.queue_restart.enabled', true)) {
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.queue_restart.enabled',
+                        true
+                    )
+                ) {
                     $this->runConfiguredPipelineStep(
                         $output,
                         $deployment,
@@ -1052,9 +1131,15 @@ class DeploymentService
                 }
 
                 /*
-                 * Health Check Stage
+                 * Health Check Stage.
                  */
-                if ((bool) data_get($config, 'pipeline.health_check.enabled', true)) {
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.health_check.enabled',
+                        true
+                    )
+                ) {
                     $this->runConfiguredPipelineStep(
                         $output,
                         $deployment,
@@ -1065,11 +1150,17 @@ class DeploymentService
                 }
 
                 $completedAt = now();
-                $duration = $completedAt->diffInSeconds($startedAt);
+
+                $duration =
+                    $completedAt->diffInSeconds(
+                        $startedAt
+                    );
 
                 $deployment->update([
                     'status' => 'completed',
+
                     'completed_at' => $completedAt,
+
                     'duration_seconds' => $duration,
                 ]);
 
@@ -1079,22 +1170,29 @@ class DeploymentService
                     'Deployment pipeline completed successfully.',
                     'success'
                 );
-
             } catch (Throwable $e) {
                 $failedAt = now();
-                $duration = $failedAt->diffInSeconds($startedAt);
+
+                $duration =
+                    $failedAt->diffInSeconds(
+                        $startedAt
+                    );
 
                 $deployment->update([
                     'status' => 'failed',
+
                     'completed_at' => $failedAt,
+
                     'duration_seconds' => $duration,
+
                     'error' => $e->getMessage(),
                 ]);
 
                 $this->auditDeployment(
                     $deployment,
                     'deployment.failed',
-                    'Deployment pipeline failed: ' . $e->getMessage(),
+                    'Deployment pipeline failed: ' .
+                        $e->getMessage(),
                     'error'
                 );
 
@@ -1110,10 +1208,19 @@ class DeploymentService
     /**
      * Validate the branch name.
      */
-    protected function validateBranch(string $branch): void
-    {
-        if (empty($branch) || ! preg_match('/^[a-zA-Z0-9_\-\.\/]+$/', $branch)) {
-            throw new RuntimeException("Invalid branch name format: [{$branch}]");
+    protected function validateBranch(
+        string $branch
+    ): void {
+        if (
+            empty($branch) ||
+            ! preg_match(
+                '/^[a-zA-Z0-9_\-\.\/]+$/',
+                $branch
+            )
+        ) {
+            throw new RuntimeException(
+                "Invalid branch name format: [{$branch}]"
+            );
         }
     }
 
@@ -1129,27 +1236,40 @@ class DeploymentService
         if (! $required) {
             return [
                 'status' => 'skipped',
-                'message' => "{$name} check skipped (not required).",
+
+                'message' =>
+                    "{$name} check skipped (not required).",
             ];
         }
 
-        $result = $this->runCommand($command, $path, 15);
+        $result = $this->runCommand(
+            $command,
+            $path,
+            15
+        );
 
         return [
-            'status' => $result->successful() ? 'healthy' : 'failed',
+            'status' => $result->successful()
+                ? 'healthy'
+                : 'failed',
+
             'message' => $result->successful()
                 ? "{$name} is installed and executable."
                 : "{$name} check failed or executable not found.",
-            'output' => trim($result->output()),
-            'error' => trim($result->errorOutput()),
+
+            'output' => trim(
+                $result->output()
+            ),
+
+            'error' => trim(
+                $result->errorOutput()
+            ),
         ];
     }
-
 
     /**
      * Helper to run configured steps with custom fallback commands.
      */
-    
     protected function runConfiguredPipelineStep(
         array &$output,
         OperationDeployment $deployment,
@@ -1162,7 +1282,10 @@ class DeploymentService
             "pipeline.{$key}.command"
         );
 
-        if (! is_array($command) || empty($command)) {
+        if (
+            ! is_array($command) ||
+            empty($command)
+        ) {
             $binaries = $config['binaries'];
 
             $command = match ($key) {
@@ -1175,12 +1298,12 @@ class DeploymentService
                 ],
 
                 'npm' => [
-                    $binaries['npm'],
+                    'npm',
                     'ci',
                 ],
 
                 'build' => [
-                    $binaries['npm'],
+                    'npm',
                     'run',
                     'build',
                 ],
@@ -1217,15 +1340,17 @@ class DeploymentService
         }
 
         /*
-         * Resolve the executable from the configured pipeline command.
+         * Resolve the configured command to the actual executable.
          *
-         * This makes sure a generic config such as:
+         * NPM/build:
          *
-         *     ['npm', 'ci']
+         *     npm ci
          *
          * becomes:
          *
-         *     ['C:/Program Files/nodejs/npm.cmd', 'ci']
+         *     node.exe npm-cli.js ci
+         *
+         * This avoids npm.cmd -> cmd.exe on Windows.
          */
         $command = $this->resolvePipelineCommand(
             $key,
@@ -1259,26 +1384,48 @@ class DeploymentService
     ): array {
         $binaries = $config['binaries'];
 
-        /*
-         * Always replace the first executable with the
-         * explicitly configured executable.
-         */
         return match ($key) {
+            /*
+             * Composer.
+             */
             'composer' => [
                 $binaries['composer'],
                 ...array_slice($command, 1),
             ],
 
+            /*
+             * NPM dependencies.
+             *
+             * npm ci
+             *
+             * becomes:
+             *
+             * node.exe npm-cli.js ci
+             */
             'npm' => [
-                $binaries['npm'],
+                $binaries['node'],
+                $binaries['npm_cli'],
                 ...array_slice($command, 1),
             ],
 
+            /*
+             * Frontend build.
+             *
+             * npm run build
+             *
+             * becomes:
+             *
+             * node.exe npm-cli.js run build
+             */
             'build' => [
-                $binaries['npm'],
+                $binaries['node'],
+                $binaries['npm_cli'],
                 ...array_slice($command, 1),
             ],
 
+            /*
+             * Laravel commands.
+             */
             'migrations' => [
                 $binaries['php'],
                 ...array_slice($command, 1),
@@ -1312,7 +1459,9 @@ class DeploymentService
         string $stepName,
         string $reason
     ): void {
-        $timestamp = now()->format('Y-m-d H:i:s');
+        $timestamp = now()->format(
+            'Y-m-d H:i:s'
+        );
 
         $output[] =
             "[{$timestamp}] Skipped step: {$stepName}";
@@ -1338,7 +1487,9 @@ class DeploymentService
         string $path,
         int $timeout = 600
     ): void {
-        $timestamp = now()->format('Y-m-d H:i:s');
+        $timestamp = now()->format(
+            'Y-m-d H:i:s'
+        );
 
         $output[] =
             "[{$timestamp}] Starting step: {$stepName}";
@@ -1473,6 +1624,7 @@ class DeploymentService
             $config['binaries']['php'],
             $config['binaries']['node'],
             $config['binaries']['npm'],
+            $config['binaries']['npm_cli'],
             $config['binaries']['composer'],
         ] as $binary) {
             $directory = $this->binaryDirectory(
@@ -1486,7 +1638,9 @@ class DeploymentService
 
         $directories = array_values(
             array_unique(
-                array_filter($directories)
+                array_filter(
+                    $directories
+                )
             )
         );
 
@@ -1559,8 +1713,7 @@ class DeploymentService
              * Preserve NODE_OPTIONS if explicitly configured,
              * but do not invent any.
              */
-            'NODE_OPTIONS' =>
-                getenv('NODE_OPTIONS') ?: '',
+            'NODE_OPTIONS' => '--openssl-legacy-provider',
 
             /*
              * Explicit PHP executable.
