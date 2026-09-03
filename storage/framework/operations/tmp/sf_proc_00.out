@@ -1,3 +1,48 @@
-* main                91f6ed74930ca12991a5480c014e06d27d30ca05 [ahead 4] Update deployment system
-  remotes/origin/HEAD -> origin/main
-  remotes/origin/main f3957b7cc3cfb2009b40eec07bc008c5a582bacf Fix deployment process environment
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\checkbox-list.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\code-editor.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\color-picker.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\date-time-picker.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\file-upload.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\key-value.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\markdown-editor.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\rich-editor.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\select.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\slider.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\tags-input.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\forms\components\textarea.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\schemas\components\actions.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\schemas\components\tabs.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\schemas\components\wizard.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\tables\components\columns\checkbox.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\tables\components\columns\select.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\tables\components\columns\text-input.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\tables\components\columns\toggle.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\widgets\components\chart.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\widgets\components\stats-overview\stat\chart.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\fonts\filament\filament\inter\index.css  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\fonts\filament\filament\inter\inter-cyrillic-ext-wght-normal-IYF56FF6.woff2  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\fonts\filament\filament\inter\inter-cyrillic-wght-normal-JEOLYBOO.woff2  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\fonts\filament\filament\inter\inter-greek-ext-wght-normal-EOVOK2B5.woff2  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\fonts\filament\filament\inter\inter-greek-wght-normal-IRE366VL.woff2  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\fonts\filament\filament\inter\inter-latin-ext-wght-normal-HA22NDSG.woff2  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\fonts\filament\filament\inter\inter-latin-wght-normal-NRMW37G5.woff2  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\fonts\filament\filament\inter\inter-vietnamese-wght-normal-CE5GGD3W.woff2  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\actions\actions.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\filament\app.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\filament\echo.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\notifications\notifications.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\schemas\schemas.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\support\support.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\js\filament\tables\tables.js  
+  ⇂ C:\Users\HUAWEI\Documents\teyaqi-backend\public\css\filament\filament\app.css  
+
+   INFO  Successfully published assets!  
+
+   INFO  Configuration cache cleared successfully.  
+
+   INFO  Route cache cleared successfully.  
+
+   INFO  Compiled views cleared successfully.  
+
+   INFO  Successfully upgraded!  
+
