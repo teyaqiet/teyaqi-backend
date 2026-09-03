@@ -1835,17 +1835,30 @@ class DeploymentService
     }
 
     /**
-     * Audit deployment event.
-     */
-    protected function auditDeployment(
-        OperationDeployment $deployment,
-        string $event,
-        string $message,
-        string $level = 'info'
-    ): void {
-        Log::channel('daily')->log(
-            $level,
-            "Deployment #{$deployment->id} [{$event}]: {$message}"
-        );
-    }
+ * Audit deployment event.
+ */
+protected function auditDeployment(
+    OperationDeployment $deployment,
+    string $event,
+    string $message,
+    string $level = 'info'
+): void {
+    $level = match (strtolower($level)) {
+        'success' => 'info',
+        'failed' => 'error',
+        'error' => 'error',
+        'warning' => 'warning',
+        'notice' => 'notice',
+        'debug' => 'debug',
+        'critical' => 'critical',
+        'alert' => 'alert',
+        'emergency' => 'emergency',
+        default => 'info',
+    };
+
+    Log::channel('daily')->log(
+        $level,
+        "Deployment #{$deployment->id} [{$event}]: {$message}"
+    );
+}
 }
