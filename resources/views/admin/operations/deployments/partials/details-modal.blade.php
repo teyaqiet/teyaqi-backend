@@ -685,20 +685,74 @@
 
         </div>
 
-        {{-- Footer --}}
         <div class="shrink-0 border-t border-gray-100 bg-white p-5">
-            <div class="flex justify-end">
 
-                <button
-                    type="button"
-                    @click="closeDetailsModal()"
-                    class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-                >
-                    Close
-                </button>
+    <div class="flex items-center justify-between gap-3">
 
-            </div>
+        {{-- Rollback availability --}}
+        <div
+            x-show="
+                selectedDeployment &&
+                selectedDeployment.status === 'completed' &&
+                (selectedDeployment.type || 'deployment') === 'deployment' &&
+                selectedDeployment.metadata?.git?.previous_commit
+            "
+            class="hidden text-xs text-gray-400 sm:block"
+        >
+            This deployment can be restored to its previous commit.
         </div>
+
+        <div class="ml-auto flex items-center gap-3">
+
+            {{-- Rollback --}}
+            <button
+                type="button"
+                x-show="
+                    selectedDeployment &&
+                    selectedDeployment.status === 'completed' &&
+                    (selectedDeployment.type || 'deployment') === 'deployment' &&
+                    selectedDeployment.metadata?.git?.previous_commit
+                "
+                @click="openRollbackPreview(selectedDeployment.id)"
+                :disabled="deploymentLock.locked"
+                :title="
+                    deploymentLock.locked
+                        ? deploymentLockMessage()
+                        : 'Preview rollback'
+                "
+                class="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.8"
+                    stroke="currentColor"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M9 15 4 10m0 0 5-5m-5 5h11a5 5 0 0 1 5 5v1"
+                    />
+                </svg>
+
+                Rollback
+            </button>
+
+            {{-- Close --}}
+            <button
+                type="button"
+                @click="closeDetailsModal()"
+                class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+                Close
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
 
     </div>
 </div>

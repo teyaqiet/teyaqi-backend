@@ -1264,103 +1264,285 @@ class DeploymentRollbackService
             : null;
     }
 
-    protected function getChangedFiles(
-        OperationDeployment $deployment,
-        string $fromCommit,
-        string $toCommit
-    ): array {
-        $result = $this->runCommand(
-            $deployment,
-            [
-                'git',
-                'diff',
-                '--name-status',
-                '-M',
-                $fromCommit,
-                $toCommit,
-            ],
-            120
+
+protected function getChangedFiles(
+    OperationDeployment $deployment,
+    string $fromCommit,
+    string $toCommit
+): array {
+    /*
+     * Get name/status information first.
+     *
+     * Example:
+     *
+     * M       app/Example.php
+     * A       app/NewFile.php
+     * D       app/OldFile.php
+     * R100    old.php    new.php
+     */
+    $statusResult = $this->runCommand(
+        $deployment,
+        [
+            'git',
+            'diff',
+            '--name-status',
+            '-M',
+            $fromCommit,
+            $toCommit,
+        ],
+        120
+    );
+
+    if (! $statusResult->successful()) {
+        throw new RuntimeException(
+            'Unable to determine changed files.'
+        );
+    }
+
+    /*
+     * Get line statistics.
+     *
+     * --numstat produces:
+     *
+     * additions    deletions    file
+     *
+     * Example:
+     *
+     * 12   4   app/Example.php
+     */
+    $numstatResult = $this->runCommand(
+        $deployment,
+        [
+            'git',
+            'diff',
+            '--numstat',
+            '-M',
+            $fromCommit,
+            $toCommit,
+        ],
+        120
+    );
+
+    if (! $numstatResult->successful()) {
+        throw new RuntimeException(
+            'Unable to determine changed-file statistics.'
+        );
+    }
+
+    /*
+     * Build a statistics lookup by path.
+     */
+    $statistics = [];
+
+    $numstatLines = preg_split(
+        '/\r\n|\r|\n/',
+        trim(
+            $numstatResult->output()
+        )
+    );
+
+    foreach ($numstatLines as $line) {
+        $line = trim($line);
+
+        if ($line === '') {
+            continue;
+        }
+
+        /*
+         * Numstat is tab-separated.
+         *
+         * Binary files can contain:
+         *
+         * -
+         * -
+         *
+         * instead of numeric values.
+         */
+        $parts = preg_split(
+            '/\t+/',
+            $line,
+            3
         );
 
-        if (! $result->successful()) {
-            throw new RuntimeException(
-                'Unable to determine changed files.'
-            );
+        if (count($parts) < 3) {
+            continue;
         }
 
-        $lines =
-            preg_split(
-                '/\r\n|\r|\n/',
-                trim(
-                    $result->output()
-                )
-            );
+        $additions =
+            is_numeric($parts[0])
+                ? (int) $parts[0]
+                : 0;
 
-        $files = [];
+        $deletions =
+            is_numeric($parts[1])
+                ? (int) $parts[1]
+                : 0;
 
-        foreach ($lines as $line) {
-            $line =
-                trim($line);
+        $path = $parts[2];
 
-            if ($line === '') {
-                continue;
-            }
-
-            $parts =
+        /*
+         * Handle rename notation.
+         *
+         * Git may return:
+         *
+         * old => new
+         */
+        if (
+            str_contains(
+                $path,
+                ' => '
+            )
+        ) {
+            $renameParts =
                 preg_split(
-                    '/\s+/',
-                    $line,
-                    3
+                    '/\s+=>\s+/',
+                    $path,
+                    2
                 );
 
-            $status =
-                $parts[0] ?? '';
-
-            $oldPath = null;
-            $path = null;
-
-            if (
-                str_starts_with(
-                    $status,
-                    'R'
-                ) ||
-                str_starts_with(
-                    $status,
-                    'C'
-                )
-            ) {
-                $oldPath =
-                    $parts[1] ?? null;
-
-                $path =
-                    $parts[2] ?? null;
-            } else {
-                $path =
-                    $parts[1] ?? null;
-            }
-
-            $files[] = [
-                'path' =>
-                    $path,
-
-                'old_path' =>
-                    $oldPath,
-
-                'status' =>
-                    $this->normalizeGitStatus(
-                        $status
-                    ),
-            ];
+            $path =
+                $renameParts[1] ??
+                $path;
         }
 
-        return [
-            'total' =>
-                count($files),
+        $statistics[$path] = [
+            'additions' =>
+                $additions,
 
-            'files' =>
-                $files,
+            'deletions' =>
+                $deletions,
         ];
     }
+
+    /*
+     * Parse name/status information.
+     */
+    $statusLines = preg_split(
+        '/\r\n|\r|\n/',
+        trim(
+            $statusResult->output()
+        )
+    );
+
+    $files = [];
+
+    $totalAdditions = 0;
+    $totalDeletions = 0;
+
+    foreach ($statusLines as $line) {
+        $line = trim($line);
+
+        if ($line === '') {
+            continue;
+        }
+
+        $parts = preg_split(
+            '/\s+/',
+            $line,
+            3
+        );
+
+        $status =
+            $parts[0] ?? '';
+
+        $oldPath = null;
+        $path = null;
+
+        /*
+         * Rename / copy.
+         */
+        if (
+            str_starts_with(
+                $status,
+                'R'
+            ) ||
+            str_starts_with(
+                $status,
+                'C'
+            )
+        ) {
+            $oldPath =
+                $parts[1] ?? null;
+
+            $path =
+                $parts[2] ?? null;
+        } else {
+            $path =
+                $parts[1] ?? null;
+        }
+
+        $normalizedStatus =
+            $this->normalizeGitStatus(
+                $status
+            );
+
+        /*
+         * Find line statistics.
+         */
+        $fileStats =
+            $statistics[$path] ??
+            null;
+
+        /*
+         * For renames Git may have stored the
+         * statistics under a different representation.
+         */
+        if (
+            ! $fileStats &&
+            $oldPath
+        ) {
+            $fileStats =
+                $statistics[$oldPath] ??
+                null;
+        }
+
+        $additions =
+            $fileStats['additions'] ??
+            0;
+
+        $deletions =
+            $fileStats['deletions'] ??
+            0;
+
+        $files[] = [
+            'path' =>
+                $path,
+
+            'old_path' =>
+                $oldPath,
+
+            'status' =>
+                $normalizedStatus,
+
+            'additions' =>
+                $additions,
+
+            'deletions' =>
+                $deletions,
+        ];
+
+        $totalAdditions +=
+            $additions;
+
+        $totalDeletions +=
+            $deletions;
+    }
+
+    return [
+        'total' =>
+            count($files),
+
+        'additions' =>
+            $totalAdditions,
+
+        'deletions' =>
+            $totalDeletions,
+
+        'files' =>
+            $files,
+    ];
+}
+
 
     protected function normalizeGitStatus(
         string $status

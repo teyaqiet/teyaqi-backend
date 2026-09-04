@@ -25,7 +25,9 @@
     @include('admin.operations.deployments.partials.deploy-modal')
     @include('admin.operations.deployments.partials.preflight-modal')
     @include('admin.operations.deployments.partials.details-modal')
+    @include('admin.operations.deployments.partials.rollback-modal')
     @include('admin.operations.deployments.partials.message-modal')
+
 </div>
 
 {{-- Alpine / Deployment Logic --}}

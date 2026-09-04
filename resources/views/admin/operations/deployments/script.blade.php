@@ -26,10 +26,29 @@ function operationsDeployments() {
             lock: null
         },
 
+        /*
+         * -----------------------------
+         * MODALS
+         * -----------------------------
+         */
+
         showDeployModal: false,
         showPreflightModal: false,
         showDetailsModal: false,
         showMessageModal: false,
+
+        /*
+         * Rollback preview modal.
+         */
+        showRollbackModal: false,
+
+        /*
+         * Rollback state.
+         */
+        rollbackLoading: false,
+        rollbackCreating: false,
+        rollbackPreview: null,
+        rollbackDeployment: null,
 
         selectedDeployment: null,
 
@@ -143,16 +162,6 @@ function operationsDeployments() {
             const result =
                 data.data || {};
 
-            /*
-             * Keep the API response structure intact.
-             *
-             * Example:
-             *
-             * overview.statistics.total
-             * overview.statistics.successful
-             * overview.statistics.failed
-             * overview.statistics.running
-             */
             this.overview = result;
 
             this.deploymentConfig = {
@@ -168,9 +177,6 @@ function operationsDeployments() {
                     result.pipeline || {}
             };
 
-            /*
-             * The API uses running_deployment.
-             */
             if (result.running_deployment) {
                 this.activeDeployment =
                     result.running_deployment;
@@ -204,25 +210,12 @@ function operationsDeployments() {
                 const result =
                     data.data || {};
 
-                /*
-                 * Support the current API name first,
-                 * while keeping backwards compatibility
-                 * with possible older response names.
-                 */
                 const active =
                     result.running_deployment ||
                     result.active_deployment ||
                     result.active ||
                     null;
 
-                /*
-                 * If there is no running deployment,
-                 * clear the active deployment only when
-                 * the current deployment itself was running.
-                 *
-                 * A deployment lock can still exist while
-                 * the queued job is waiting to execute.
-                 */
                 if (!active) {
                     if (
                         this.activeDeployment &&
@@ -233,10 +226,6 @@ function operationsDeployments() {
                             this.activeDeployment.status
                         )
                     ) {
-                        /*
-                         * Keep a locally-created pending
-                         * deployment while the queue starts.
-                         */
                         if (
                             !this.deploymentLock.locked
                         ) {
@@ -254,11 +243,6 @@ function operationsDeployments() {
                 this.activeDeployment =
                     active;
 
-                /*
-                 * If a deployment transitions from
-                 * pending/running to completed/failed,
-                 * show the result and reload the page.
-                 */
                 if (
                     oldStatus &&
                     [
@@ -270,9 +254,17 @@ function operationsDeployments() {
                         'failed'
                     ].includes(active.status)
                 ) {
-                    this.handleDeploymentFinished(
-                        active
-                    );
+                    if (
+                        active.type === 'rollback'
+                    ) {
+                        this.handleRollbackFinished(
+                            active
+                        );
+                    } else {
+                        this.handleDeploymentFinished(
+                            active
+                        );
+                    }
                 }
 
             } catch (error) {
@@ -405,19 +397,8 @@ function operationsDeployments() {
             this.pollingTimer =
                 setInterval(async () => {
 
-                    /*
-                     * Always check the lock.
-                     *
-                     * This allows another admin's
-                     * deployment to appear immediately.
-                     */
                     await this.loadLockStatus();
 
-                    /*
-                     * If nothing is running and there
-                     * is no lock, there is no reason to
-                     * continuously request deployment data.
-                     */
                     if (!this.deploymentRunning) {
                         return;
                     }
@@ -477,13 +458,6 @@ function operationsDeployments() {
                     : 0;
             }
 
-            /*
-             * We don't currently receive exact command
-             * percentage progress from the backend.
-             *
-             * Therefore the running step contributes
-             * half a step visually.
-             */
             const completed =
                 this.completedStepCount();
 
@@ -545,10 +519,6 @@ function operationsDeployments() {
                 return 'pending';
             }
 
-            /*
-             * Support several possible backend
-             * pipeline structures.
-             */
             const pipeline =
                 this.activeDeployment.pipeline ||
                 this.activeDeployment.steps ||
@@ -573,9 +543,6 @@ function operationsDeployments() {
                 );
             }
 
-            /*
-             * Fallback to current step metadata.
-             */
             const currentStep =
                 this.activeDeployment.current_step ||
                 this.activeDeployment.current_stage ||
@@ -599,10 +566,6 @@ function operationsDeployments() {
                 }
             }
 
-            /*
-             * Don't falsely mark unknown steps
-             * as completed.
-             */
             return 'pending';
         },
 
@@ -667,10 +630,6 @@ function operationsDeployments() {
             }
 
             if (status === 'running') {
-                /*
-                 * The CSS animation represents an
-                 * indeterminate running state.
-                 */
                 return 100;
             }
 
@@ -874,10 +833,6 @@ function operationsDeployments() {
          */
 
         openDeployModal() {
-            /*
-             * Never allow the deployment modal
-             * to open while the environment is locked.
-             */
             if (this.deploymentRunning) {
 
                 this.showMessage(
@@ -900,10 +855,6 @@ function operationsDeployments() {
         async beginDeployment() {
             this.closeDeployModal();
 
-            /*
-             * Re-check the lock immediately before
-             * starting preflight.
-             */
             await this.loadLockStatus();
 
             if (this.deploymentRunning) {
@@ -988,10 +939,6 @@ function operationsDeployments() {
                 return;
             }
 
-            /*
-             * Check the lock one more time before
-             * allowing the final confirmation.
-             */
             if (this.deploymentRunning) {
 
                 this.closePreflightModal();
@@ -1042,12 +989,6 @@ function operationsDeployments() {
         async createDeployment() {
             this.closeMessageModal();
 
-            /*
-             * Final client-side lock check.
-             *
-             * The backend will also enforce the lock,
-             * so this is only for a faster UI response.
-             */
             await this.loadLockStatus();
 
             if (this.deploymentRunning) {
@@ -1111,16 +1052,10 @@ function operationsDeployments() {
                 this.activeDeployment =
                     data.data || null;
 
-                /*
-                 * Refresh statistics immediately.
-                 */
                 await this.loadOverview();
 
                 await this.loadHistory();
 
-                /*
-                 * Refresh lock status immediately.
-                 */
                 await this.loadLockStatus();
 
                 this.showMessage(
@@ -1136,11 +1071,6 @@ function operationsDeployments() {
                     error
                 );
 
-                /*
-                 * Refresh lock state because another
-                 * deployment may have acquired the lock
-                 * between our checks.
-                 */
                 await this.loadLockStatus();
 
                 this.showMessage(
@@ -1194,14 +1124,299 @@ function operationsDeployments() {
                 }
             );
 
-            /*
-             * Give the user a moment to see the
-             * success/failure message before
-             * refreshing the page.
-             */
             setTimeout(() => {
                 window.location.reload();
             }, 1800);
+        },
+
+        /*
+         * -----------------------------
+         * ROLLBACK
+         * -----------------------------
+         */
+
+        async openRollbackPreview(id) {
+            /*
+             * Close the deployment details modal
+             * while showing the rollback preview.
+             */
+            this.showRollbackModal = true;
+
+            this.rollbackLoading = true;
+
+            this.rollbackPreview = null;
+
+            this.rollbackDeployment = null;
+
+            try {
+                await this.loadLockStatus();
+
+                /*
+                 * Never allow rollback while another
+                 * deployment or rollback is running.
+                 */
+                if (this.deploymentRunning) {
+                    this.showRollbackModal = false;
+
+                    this.showMessage(
+                        'warning',
+                        'Operation Already Running',
+                        this.deploymentLockMessage() ||
+                        'Another deployment or rollback is currently running.'
+                    );
+
+                    return;
+                }
+
+                const response = await fetch(
+                    `{{ url('/api/admin/operations/rollbacks') }}/${id}/preview`,
+                    {
+                        headers: {
+                            'Accept':
+                                'application/json'
+                        }
+                    }
+                );
+
+                const data =
+                    await this.parseResponse(response);
+
+                if (!data.success) {
+                    throw new Error(
+                        data.message ||
+                        'Unable to prepare rollback preview.'
+                    );
+                }
+
+                this.rollbackDeployment = {
+                    id
+                };
+
+                this.rollbackPreview =
+                    data.data || {};
+
+            } catch (error) {
+                console.error(
+                    'Rollback preview failed:',
+                    error
+                );
+
+                this.showRollbackModal = false;
+
+                this.showMessage(
+                    'error',
+                    'Rollback Preview Failed',
+                    this.errorMessage(error)
+                );
+
+            } finally {
+                this.rollbackLoading = false;
+            }
+        },
+
+        closeRollbackModal() {
+            if (this.rollbackCreating) {
+                return;
+            }
+
+            this.showRollbackModal = false;
+
+            this.rollbackPreview = null;
+
+            this.rollbackDeployment = null;
+        },
+
+        rollbackCanProceed() {
+            const preview =
+                this.rollbackPreview;
+
+            if (!preview) {
+                return false;
+            }
+
+            if (preview.locked) {
+                return false;
+            }
+
+            if (!preview.target_commit) {
+                return false;
+            }
+
+            if (
+                preview.current_commit ===
+                preview.target_commit
+            ) {
+                return false;
+            }
+
+            return true;
+        },
+
+        confirmRollback() {
+            if (
+                !this.rollbackCanProceed()
+            ) {
+                return;
+            }
+
+            const preview =
+                this.rollbackPreview;
+
+            this.showRollbackModal = false;
+
+            this.showConfirmation(
+                'Rollback Deployment?',
+
+                `Deployment #${preview.deployment_id} will be reverted from ${preview.current_commit_short || 'the current commit'} to ${preview.target_commit_short || 'the previous commit'}. This will change the application code and run the deployment pipeline again.`,
+
+                () => this.createRollback(
+                    preview.deployment_id
+                )
+            );
+        },
+
+        async createRollback(id) {
+            this.closeMessageModal();
+
+            await this.loadLockStatus();
+
+            if (this.deploymentRunning) {
+
+                this.showMessage(
+                    'warning',
+                    'Operation Already Running',
+                    this.deploymentLockMessage() ||
+                    'Another deployment or rollback is currently running.'
+                );
+
+                return;
+            }
+
+            this.rollbackCreating = true;
+
+            this.reloadScheduled = false;
+
+            try {
+                const response = await fetch(
+                    `{{ url('/api/admin/operations/rollbacks') }}/${id}/create`,
+                    {
+                        method: 'POST',
+
+                        headers: {
+                            'Accept':
+                                'application/json',
+
+                            'Content-Type':
+                                'application/json',
+
+                            'X-CSRF-TOKEN':
+                                '{{ csrf_token() }}'
+                        },
+
+                        body: JSON.stringify({})
+                    }
+                );
+
+                const data =
+                    await this.parseResponse(response);
+
+                if (!data.success) {
+                    throw new Error(
+                        data.message ||
+                        'Failed to create rollback.'
+                    );
+                }
+
+                /*
+                 * The rollback itself becomes the
+                 * active operation.
+                 */
+                this.activeDeployment =
+                    data.data || null;
+
+                this.previousDeploymentStatus =
+                    null;
+
+                await this.loadOverview();
+
+                await this.loadHistory();
+
+                await this.loadLockStatus();
+
+                this.showMessage(
+                    'success',
+                    'Rollback Started',
+                    data.message ||
+                    'The rollback has been queued successfully.'
+                );
+
+            } catch (error) {
+                console.error(
+                    'Failed to create rollback:',
+                    error
+                );
+
+                await this.loadLockStatus();
+
+                this.showMessage(
+                    'error',
+                    'Rollback Failed',
+                    this.errorMessage(error)
+                );
+
+            } finally {
+                this.rollbackCreating = false;
+            }
+        },
+
+        handleRollbackFinished(rollback) {
+            if (this.reloadScheduled) {
+                return;
+            }
+
+            this.reloadScheduled = true;
+
+            const success =
+                rollback.status ===
+                'completed';
+
+            this.showMessage(
+                success
+                    ? 'success'
+                    : 'error',
+
+                success
+                    ? 'Rollback Successful'
+                    : 'Rollback Failed',
+
+                success
+                    ? `Rollback #${rollback.id} completed successfully. The application has been restored to ${this.shortCommit(rollback.commit_hash)}.`
+                    : (
+                        rollback.error ||
+                        `Rollback #${rollback.id} failed.`
+                    ),
+
+                {
+                    confirmText: 'OK',
+                    showCancel: false,
+                    autoClose: false
+                }
+            );
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 1800);
+        },
+
+        shortCommit(commit) {
+            if (!commit) {
+                return '—';
+            }
+
+            return String(commit).substring(
+                0,
+                8
+            );
         },
 
         /*
@@ -1279,7 +1494,7 @@ function operationsDeployments() {
 
                 message,
 
-                confirmText: 'Deploy',
+                confirmText: 'Confirm',
 
                 cancelText: 'Cancel',
 
