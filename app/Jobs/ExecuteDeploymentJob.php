@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\OperationDeployment;
+use App\Operations\Services\DeploymentLockService;
 use App\Operations\Services\DeploymentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -32,7 +33,8 @@ class ExecuteDeploymentJob implements ShouldQueue
     }
 
     public function handle(
-        DeploymentService $deploymentService
+        DeploymentService $deploymentService,
+        DeploymentLockService $deploymentLockService
     ): void {
         $deployment = OperationDeployment::find(
             $this->deploymentId
@@ -49,7 +51,28 @@ class ExecuteDeploymentJob implements ShouldQueue
             return;
         }
 
-        $deploymentService->execute($deployment);
+        /*
+         * Acquire the deployment lock.
+         *
+         * This prevents two deployments from running
+         * against the same environment at the same time.
+         */
+        $deploymentLockService->acquire($deployment);
+
+        try {
+            /*
+             * Execute the actual deployment.
+             */
+            $deploymentService->execute($deployment);
+        } finally {
+            /*
+             * Always release the lock.
+             *
+             * This runs when the deployment succeeds,
+             * fails, or throws an exception.
+             */
+            $deploymentLockService->release($deployment);
+        }
     }
 
     public function failed(Throwable $exception): void
@@ -62,17 +85,25 @@ class ExecuteDeploymentJob implements ShouldQueue
             return;
         }
 
+        /*
+         * Safety cleanup.
+         *
+         * If Laravel marks the job as failed after an
+         * exception/timeout, make sure its lock is removed.
+         */
+        app(DeploymentLockService::class)->release($deployment);
+
         $deployment->update([
             'status' => 'failed',
             'error' => $exception->getMessage(),
             'completed_at' => now(),
             'duration_seconds' => $deployment->started_at
-    ? max(
-        0,
-        now()->getTimestamp() -
-        $deployment->started_at->getTimestamp()
-    )
-    : null,
+                ? max(
+                    0,
+                    now()->getTimestamp() -
+                    $deployment->started_at->getTimestamp()
+                )
+                : null,
         ]);
     }
 }

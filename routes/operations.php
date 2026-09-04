@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\Operations\CacheController;
 use App\Http\Controllers\Admin\Operations\DatabaseController;
 use App\Http\Controllers\Admin\Operations\BackupController;
 use App\Http\Controllers\Admin\Operations\BackupDiagnosticController;
+use App\Http\Controllers\Admin\Operations\RollbackController;
 use App\Http\Controllers\Admin\Operations\DeploymentController;
 use Illuminate\Support\Facades\Route;
 
@@ -258,7 +259,35 @@ Route::middleware([
                     DeploymentController::class,
                     'deploy',
                 ])->name('create');
+
+                Route::get('/lock-status', [
+                    DeploymentController::class, 'lockStatus'])
+                    ->name('lock-status');
             });
+
+
+            Route::prefix('rollbacks')
+    ->name('operations.rollbacks.')
+    ->group(function () {
+        Route::get(
+            '/',
+            [RollbackController::class, 'index']
+        )->name('index');
+
+        Route::get(
+            '/{id}/preview',
+            [RollbackController::class, 'preview']
+        )
+            ->whereNumber('id')
+            ->name('preview');
+
+        Route::post(
+            '/{id}/create',
+            [RollbackController::class, 'create']
+        )
+            ->whereNumber('id')
+            ->name('create');
+    });
     
 
     });

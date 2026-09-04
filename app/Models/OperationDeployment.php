@@ -20,6 +20,8 @@ class OperationDeployment extends Model
         'output',
         'error',
         'metadata',
+        'type',
+        'rollback_of',
     ];
 
     protected $casts = [
@@ -29,6 +31,9 @@ class OperationDeployment extends Model
         'metadata' => 'array',
     ];
 
+    /**
+     * Admin user who triggered the deployment.
+     */
     public function adminUser(): BelongsTo
     {
         return $this->belongsTo(
@@ -36,4 +41,62 @@ class OperationDeployment extends Model
             'triggered_by'
         );
     }
+
+    /**
+     * Determine whether this deployment completed successfully.
+     */
+    public function isSuccessful(): bool
+    {
+        return $this->status === 'completed';
+    }
+
+    /**
+     * Determine whether this deployment can be rolled back to.
+     */
+    public function canRollback(): bool
+    {
+        return $this->isSuccessful()
+            && !empty($this->commit_hash);
+    }
+
+    /**
+     * Determine whether this deployment is a rollback.
+     */
+    public function isRollback(): bool
+    {
+        return data_get(
+            $this->metadata,
+            'rollback.is_rollback',
+            false
+        ) === true;
+    }
+
+    /**
+     * Get rollback metadata.
+     */
+    public function rollbackMetadata(): array
+    {
+        return data_get(
+            $this->metadata,
+            'rollback',
+            []
+        );
+    }
+
+    public function rollbackOf()
+{
+    return $this->belongsTo(
+        OperationDeployment::class,
+        'rollback_of'
+    );
+}
+
+public function rollbacks()
+{
+    return $this->hasMany(
+        OperationDeployment::class,
+        'rollback_of'
+    );
+}
+
 }

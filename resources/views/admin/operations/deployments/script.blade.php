@@ -15,6 +15,17 @@ function operationsDeployments() {
         activeDeployment: null,
         history: [],
 
+        /*
+         * -----------------------------
+         * DEPLOYMENT LOCK
+         * -----------------------------
+         */
+
+        deploymentLock: {
+            locked: false,
+            lock: null
+        },
+
         showDeployModal: false,
         showPreflightModal: false,
         showDetailsModal: false,
@@ -62,6 +73,12 @@ function operationsDeployments() {
 
         previousDeploymentStatus: null,
 
+        /*
+         * -----------------------------
+         * INITIALIZATION
+         * -----------------------------
+         */
+
         async init() {
             await this.refresh();
 
@@ -74,10 +91,12 @@ function operationsDeployments() {
             try {
                 await Promise.all([
                     this.loadOverview(),
-                    this.loadHistory()
+                    this.loadHistory(),
+                    this.loadLockStatus()
                 ]);
 
                 await this.loadActiveDeployment();
+
             } catch (error) {
                 console.error(
                     'Failed to refresh deployments:',
@@ -89,6 +108,7 @@ function operationsDeployments() {
                     'Refresh Failed',
                     this.errorMessage(error)
                 );
+
             } finally {
                 this.loading = false;
             }
@@ -110,7 +130,8 @@ function operationsDeployments() {
                 }
             );
 
-            const data = await this.parseResponse(response);
+            const data =
+                await this.parseResponse(response);
 
             if (!data.success) {
                 throw new Error(
@@ -119,7 +140,8 @@ function operationsDeployments() {
                 );
             }
 
-            const result = data.data || {};
+            const result =
+                data.data || {};
 
             /*
              * Keep the API response structure intact.
@@ -179,7 +201,8 @@ function operationsDeployments() {
                     return;
                 }
 
-                const result = data.data || {};
+                const result =
+                    data.data || {};
 
                 /*
                  * Support the current API name first,
@@ -193,22 +216,43 @@ function operationsDeployments() {
                     null;
 
                 /*
-                 * If there is no running deployment, clear
-                 * the active deployment so the UI correctly
-                 * becomes idle.
+                 * If there is no running deployment,
+                 * clear the active deployment only when
+                 * the current deployment itself was running.
+                 *
+                 * A deployment lock can still exist while
+                 * the queued job is waiting to execute.
                  */
                 if (!active) {
-                    if (this.deploymentRunning) {
-                        this.activeDeployment = null;
+                    if (
+                        this.activeDeployment &&
+                        [
+                            'pending',
+                            'running'
+                        ].includes(
+                            this.activeDeployment.status
+                        )
+                    ) {
+                        /*
+                         * Keep a locally-created pending
+                         * deployment while the queue starts.
+                         */
+                        if (
+                            !this.deploymentLock.locked
+                        ) {
+                            this.activeDeployment = null;
+                        }
                     }
 
                     return;
                 }
 
                 const oldStatus =
-                    this.activeDeployment?.status || null;
+                    this.activeDeployment?.status ||
+                    null;
 
-                this.activeDeployment = active;
+                this.activeDeployment =
+                    active;
 
                 /*
                  * If a deployment transitions from
@@ -217,10 +261,18 @@ function operationsDeployments() {
                  */
                 if (
                     oldStatus &&
-                    ['pending', 'running'].includes(oldStatus) &&
-                    ['completed', 'failed'].includes(active.status)
+                    [
+                        'pending',
+                        'running'
+                    ].includes(oldStatus) &&
+                    [
+                        'completed',
+                        'failed'
+                    ].includes(active.status)
                 ) {
-                    this.handleDeploymentFinished(active);
+                    this.handleDeploymentFinished(
+                        active
+                    );
                 }
 
             } catch (error) {
@@ -229,6 +281,65 @@ function operationsDeployments() {
                     error
                 );
             }
+        },
+
+        /*
+         * -----------------------------
+         * DEPLOYMENT LOCK
+         * -----------------------------
+         */
+
+        async loadLockStatus() {
+            try {
+                const environment =
+                    this.deploymentConfig.environment ||
+                    'staging';
+
+                const response = await fetch(
+                    `{{ url('/api/admin/operations/deployments/lock-status') }}?environment=${encodeURIComponent(environment)}`,
+                    {
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    }
+                );
+
+                const data =
+                    await this.parseResponse(response);
+
+                if (!data.success) {
+                    return;
+                }
+
+                this.deploymentLock = {
+                    locked:
+                        data.data?.locked === true,
+
+                    lock:
+                        data.data?.lock || null
+                };
+
+            } catch (error) {
+                console.error(
+                    'Failed to load deployment lock:',
+                    error
+                );
+            }
+        },
+
+        deploymentLockMessage() {
+            const lock =
+                this.deploymentLock.lock;
+
+            if (!lock) {
+                return '';
+            }
+
+            if (lock.deployment_id) {
+                return `Deployment #${lock.deployment_id} is currently running in ${lock.environment || 'staging'}.`;
+            }
+
+            return `A deployment is currently running in ${lock.environment || 'staging'}.`;
         },
 
         /*
@@ -294,6 +405,19 @@ function operationsDeployments() {
             this.pollingTimer =
                 setInterval(async () => {
 
+                    /*
+                     * Always check the lock.
+                     *
+                     * This allows another admin's
+                     * deployment to appear immediately.
+                     */
+                    await this.loadLockStatus();
+
+                    /*
+                     * If nothing is running and there
+                     * is no lock, there is no reason to
+                     * continuously request deployment data.
+                     */
                     if (!this.deploymentRunning) {
                         return;
                     }
@@ -327,7 +451,7 @@ function operationsDeployments() {
                 'running'
             ].includes(
                 this.activeDeployment?.status
-            );
+            ) || this.deploymentLock.locked;
         },
 
         get deploymentProgress() {
@@ -518,6 +642,15 @@ function operationsDeployments() {
                 return 'failed';
             }
 
+            if (
+                [
+                    'skipped',
+                    'disabled'
+                ].includes(status)
+            ) {
+                return 'skipped';
+            }
+
             return 'pending';
         },
 
@@ -560,6 +693,10 @@ function operationsDeployments() {
                 return 'border-red-200 bg-red-50/30';
             }
 
+            if (status === 'skipped') {
+                return 'border-gray-200 bg-gray-50';
+            }
+
             return 'border-gray-100 bg-white';
         },
 
@@ -577,6 +714,10 @@ function operationsDeployments() {
 
             if (status === 'failed') {
                 return 'bg-red-100 text-red-600';
+            }
+
+            if (status === 'skipped') {
+                return 'bg-gray-100 text-gray-400';
             }
 
             return 'bg-gray-100 text-gray-500';
@@ -598,6 +739,10 @@ function operationsDeployments() {
                 return 'bg-red-500';
             }
 
+            if (status === 'skipped') {
+                return 'bg-gray-300';
+            }
+
             return 'bg-gray-200';
         },
 
@@ -615,6 +760,10 @@ function operationsDeployments() {
 
             if (status === 'failed') {
                 return 'text-red-600';
+            }
+
+            if (status === 'skipped') {
+                return 'text-gray-400';
             }
 
             return 'text-gray-400';
@@ -725,7 +874,19 @@ function operationsDeployments() {
          */
 
         openDeployModal() {
+            /*
+             * Never allow the deployment modal
+             * to open while the environment is locked.
+             */
             if (this.deploymentRunning) {
+
+                this.showMessage(
+                    'warning',
+                    'Deployment Already Running',
+                    this.deploymentLockMessage() ||
+                    'Another deployment is currently running.'
+                );
+
                 return;
             }
 
@@ -738,6 +899,24 @@ function operationsDeployments() {
 
         async beginDeployment() {
             this.closeDeployModal();
+
+            /*
+             * Re-check the lock immediately before
+             * starting preflight.
+             */
+            await this.loadLockStatus();
+
+            if (this.deploymentRunning) {
+
+                this.showMessage(
+                    'warning',
+                    'Deployment Already Running',
+                    this.deploymentLockMessage() ||
+                    'Another deployment is currently running.'
+                );
+
+                return;
+            }
 
             await this.runPreflight();
         },
@@ -809,6 +988,24 @@ function operationsDeployments() {
                 return;
             }
 
+            /*
+             * Check the lock one more time before
+             * allowing the final confirmation.
+             */
+            if (this.deploymentRunning) {
+
+                this.closePreflightModal();
+
+                this.showMessage(
+                    'warning',
+                    'Deployment Already Running',
+                    this.deploymentLockMessage() ||
+                    'Another deployment is currently running.'
+                );
+
+                return;
+            }
+
             const failed =
                 this.preflightResult?.success === false ||
                 this.preflightResult?.passed === false;
@@ -844,6 +1041,26 @@ function operationsDeployments() {
 
         async createDeployment() {
             this.closeMessageModal();
+
+            /*
+             * Final client-side lock check.
+             *
+             * The backend will also enforce the lock,
+             * so this is only for a faster UI response.
+             */
+            await this.loadLockStatus();
+
+            if (this.deploymentRunning) {
+
+                this.showMessage(
+                    'warning',
+                    'Deployment Already Running',
+                    this.deploymentLockMessage() ||
+                    'Another deployment is currently running.'
+                );
+
+                return;
+            }
 
             this.loading = true;
 
@@ -901,6 +1118,11 @@ function operationsDeployments() {
 
                 await this.loadHistory();
 
+                /*
+                 * Refresh lock status immediately.
+                 */
+                await this.loadLockStatus();
+
                 this.showMessage(
                     'success',
                     'Deployment Started',
@@ -913,6 +1135,13 @@ function operationsDeployments() {
                     'Failed to create deployment:',
                     error
                 );
+
+                /*
+                 * Refresh lock state because another
+                 * deployment may have acquired the lock
+                 * between our checks.
+                 */
+                await this.loadLockStatus();
 
                 this.showMessage(
                     'error',
