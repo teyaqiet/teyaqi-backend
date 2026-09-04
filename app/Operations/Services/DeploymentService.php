@@ -12,20 +12,6 @@ use Throwable;
 class DeploymentService
 {
     /**
-     * Pipeline stages used by the deployment system.
-     */
-    protected array $pipelineStages = [
-        'git',
-        'composer',
-        'npm',
-        'build',
-        'migrations',
-        'optimize',
-        'queue_restart',
-        'health_check',
-    ];
-
-    /**
      * Get deployment configuration.
      */
     public function config(): array
@@ -77,9 +63,6 @@ class DeploymentService
 
                 /*
                  * Kept for backwards compatibility/reference.
-                 *
-                 * NPM deployment commands should NOT execute npm.cmd
-                 * directly on Windows.
                  */
                 'npm' => config(
                     'operations.deployments.binaries.npm',
@@ -88,14 +71,6 @@ class DeploymentService
 
                 /*
                  * Direct npm CLI entry point.
-                 *
-                 * Instead of:
-                 *
-                 * npm.cmd -> cmd.exe -> node.exe
-                 *
-                 * we use:
-                 *
-                 * node.exe -> npm-cli.js
                  */
                 'npm_cli' => config(
                     'operations.deployments.binaries.npm_cli',
@@ -136,22 +111,6 @@ class DeploymentService
             ->latest('id')
             ->first();
 
-        /*
-         * If a deployment is pending/running, make sure the frontend
-         * receives a normalized runtime pipeline structure.
-         */
-        if ($running) {
-            $running = $this->normalizeDeploymentPipeline(
-                $running
-            );
-        }
-
-        if ($latest) {
-            $latest = $this->normalizeDeploymentPipeline(
-                $latest
-            );
-        }
-
         return [
             'enabled' => $config['enabled'],
 
@@ -165,18 +124,12 @@ class DeploymentService
 
             'remote' => $config['remote'],
 
-            /*
-             * Configuration-level pipeline.
-             */
             'pipeline' => $this->pipelineOverview(
                 $config['pipeline']
             ),
 
             'latest_deployment' => $latest,
 
-            /*
-             * Runtime deployment.
-             */
             'running_deployment' => $running,
 
             'statistics' => [
@@ -305,17 +258,9 @@ class DeploymentService
      */
     public function find(int $id): ?OperationDeployment
     {
-        $deployment = OperationDeployment::query()
+        return OperationDeployment::query()
             ->with('adminUser:id,name,email')
             ->find($id);
-
-        if (! $deployment) {
-            return null;
-        }
-
-        return $this->normalizeDeploymentPipeline(
-            $deployment
-        );
     }
 
     /**
@@ -345,9 +290,7 @@ class DeploymentService
         /*
          * Deployment directory.
          */
-        $directoryExists = is_dir(
-            $config['path']
-        );
+        $directoryExists = is_dir($config['path']);
 
         $checks['directory'] = [
             'status' => $directoryExists
@@ -534,7 +477,7 @@ class DeploymentService
         );
 
         /*
-         * Composer lock.
+         * Composer lock file.
          */
         if (
             (bool) data_get(
@@ -568,7 +511,7 @@ class DeploymentService
         }
 
         /*
-         * NPM lock.
+         * NPM lock file.
          */
         if (
             (bool) data_get(
@@ -671,10 +614,6 @@ class DeploymentService
             );
         }
 
-        /*
-         * Prevent two deployment creation requests
-         * from happening simultaneously.
-         */
         $lock = cache()->lock(
             'teyaqi:operations:deployment:create',
             30
@@ -687,30 +626,6 @@ class DeploymentService
         }
 
         try {
-            /*
-             * Check whether another deployment is already
-             * pending or running.
-             */
-            $existingDeployment = OperationDeployment::query()
-                ->whereIn(
-                    'status',
-                    [
-                        'pending',
-                        'running',
-                    ]
-                )
-                ->latest('id')
-                ->first();
-
-            if ($existingDeployment) {
-                throw new RuntimeException(
-                    "Deployment #{$existingDeployment->id} is already pending or running."
-                );
-            }
-
-            /*
-             * Run preflight checks.
-             */
             $preflight = $this->preflight();
 
             if (! $preflight['ready']) {
@@ -725,13 +640,9 @@ class DeploymentService
             $branch = $data['branch']
                 ?? $config['branch'];
 
-            $branch = trim(
-                (string) $branch
-            );
+            $branch = trim($branch);
 
-            $this->validateBranch(
-                $branch
-            );
+            $this->validateBranch($branch);
 
             /*
              * Get current local commit.
@@ -778,7 +689,7 @@ class DeploymentService
                 : null;
 
             /*
-             * Create deployment.
+             * Create deployment record.
              */
             $deployment = OperationDeployment::create([
                 'environment' => $environment,
@@ -815,29 +726,17 @@ class DeploymentService
                             $config['binaries']['php'],
                     ],
 
-                    /*
-                     * IMPORTANT:
-                     *
-                     * This is now a runtime pipeline structure.
-                     */
-                    'pipeline' =>
-                        $this->initializePipelineMetadata(
-                            [],
-                            $config['pipeline']
-                        ),
+                    'pipeline' => $this->pipelineOverview(
+                        $config['pipeline']
+                    ),
                 ],
             ]);
 
-            /*
-             * Queue actual deployment execution.
-             */
             ExecuteDeploymentJob::dispatch(
                 $deployment->id
             );
 
-            return $this->normalizeDeploymentPipeline(
-                $deployment->fresh()
-            );
+            return $deployment->fresh();
         } finally {
             $lock->release();
         }
@@ -851,10 +750,6 @@ class DeploymentService
     ): OperationDeployment {
         $config = $this->config();
 
-        /*
-         * Keep the lock slightly longer than the deployment
-         * timeout.
-         */
         $lockSeconds = max(
             $config['timeout'] + 60,
             120
@@ -882,18 +777,10 @@ class DeploymentService
                 );
             }
 
-            /*
-             * Only pending deployments can be executed.
-             */
             if ($deployment->status !== 'pending') {
-                return $this->normalizeDeploymentPipeline(
-                    $deployment->fresh()
-                );
+                return $deployment->fresh();
             }
 
-            /*
-             * Check for another deployment.
-             */
             $anotherDeploymentRunning = OperationDeployment::query()
                 ->whereIn(
                     'status',
@@ -918,11 +805,7 @@ class DeploymentService
             $startedAt = now();
 
             /*
-             * Initialize the runtime pipeline BEFORE running
-             * the first command.
-             *
-             * This is what allows the frontend to immediately
-             * see all stages.
+             * Initialize runtime pipeline state.
              */
             $metadata = $this->initializePipelineMetadata(
                 $deployment->metadata ?? [],
@@ -937,8 +820,6 @@ class DeploymentService
                 'completed_at' => null,
 
                 'duration_seconds' => null,
-
-                'output' => null,
 
                 'error' => null,
 
@@ -958,14 +839,11 @@ class DeploymentService
 
             try {
                 /*
-                 * =====================================================
-                 * GIT STAGE
-                 * =====================================================
+                 * Git operations.
                  *
-                 * Git contains multiple commands but is displayed
-                 * as one pipeline stage.
+                 * All four Git commands belong to one
+                 * pipeline stage: "git".
                  */
-
                 $this->runDeploymentStep(
                     $output,
                     $deployment,
@@ -1012,6 +890,12 @@ class DeploymentService
                     false
                 );
 
+                /*
+                 * Pull latest code.
+                 *
+                 * This is the final Git operation, so after
+                 * it succeeds the Git stage becomes completed.
+                 */
                 $this->runDeploymentStep(
                     $output,
                     $deployment,
@@ -1030,7 +914,7 @@ class DeploymentService
                 );
 
                 /*
-                 * Get actual deployed commit.
+                 * Record actual deployed commit.
                  */
                 $deployedCommit = $this->runCommand(
                     [
@@ -1055,9 +939,6 @@ class DeploymentService
                     $deployedCommit->output()
                 );
 
-                /*
-                 * Get deployed commit message.
-                 */
                 $deployedMessage = $this->runCommand(
                     [
                         'git',
@@ -1069,141 +950,274 @@ class DeploymentService
                     30
                 );
 
-                $deployment->update([
-                    'commit_hash' =>
-                        $deployedCommitHash ?: null,
+                /*
+                 * Determine the previous deployed commit.
+                 *
+                 * We use the previous completed deployment for
+                 * the same environment and branch.
+                 */
+                $previousDeployment = OperationDeployment::query()
+                    ->where('id', '!=', $deployment->id)
+                    ->where('environment', $deployment->environment)
+                    ->where('branch', $deployment->branch)
+                    ->where('status', 'completed')
+                    ->whereNotNull('commit_hash')
+                    ->latest('id')
+                    ->first();
 
-                    'commit_message' =>
-                        $deployedMessage->successful()
-                            ? trim(
-                                $deployedMessage->output()
-                            )
-                            : null,
+                $previousCommitHash = $previousDeployment?->commit_hash;
+
+                /*
+                 * Calculate files changed by this deployment.
+                 */
+                $changedFiles = $this->getChangedFiles(
+                    $config['path'],
+                    $previousCommitHash,
+                    $deployedCommitHash
+                );
+
+                $deployment->update([
+                    'commit_hash' => $deployedCommitHash ?: null,
+
+                    'commit_message' => $deployedMessage->successful()
+                        ? trim($deployedMessage->output())
+                        : null,
+
+                    'metadata' => array_merge(
+                        $deployment->metadata ?? [],
+                        [
+                            'git' => [
+                                'previous_commit' =>
+                                    $previousCommitHash,
+
+                                'deployed_commit' =>
+                                    $deployedCommitHash,
+
+                                'changed_files' =>
+                                    $changedFiles,
+                            ],
+                        ]
+                    ),
                 ]);
 
                 $output[] =
-                    '[' .
-                    now()->format('Y-m-d H:i:s') .
-                    '] Deployment commit';
+                    '[' . now()->format('Y-m-d H:i:s') . '] Deployment commit';
 
                 $output[] =
                     'Commit: ' .
-                    (
-                        $deployedCommitHash
-                            ?: 'unknown'
-                    );
+                    ($deployedCommitHash ?: 'unknown');
 
                 $output[] =
                     'Message: ' .
                     (
                         $deployedMessage->successful()
-                            ? trim(
-                                $deployedMessage->output()
-                            )
+                            ? trim($deployedMessage->output())
                             : 'unknown'
                     );
 
-                $this->saveOutput(
-                    $deployment,
-                    $output
-                );
+                $output[] =
+                    'Previous commit: ' .
+                    ($previousCommitHash ?: 'none');
+
+                $output[] =
+                    'Changed files: ' .
+                    ($changedFiles['total'] ?? 0);
+
+                $deployment->update([
+                    'output' => implode(
+                        PHP_EOL . PHP_EOL,
+                        $output
+                    ),
+                ]);
 
                 /*
-                 * =====================================================
-                 * COMPOSER
-                 * =====================================================
+                 * Composer Pipeline Stage.
                  */
-                $this->runOrSkipConfiguredStage(
-                    output: $output,
-                    deployment: $deployment,
-                    key: 'composer',
-                    stepName: 'Install Composer dependencies',
-                    config: $config
-                );
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.composer.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Install Composer dependencies',
+                        'composer',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Install Composer dependencies',
+                        'Composer pipeline stage is disabled.',
+                        'composer'
+                    );
+                }
 
                 /*
-                 * =====================================================
-                 * NPM
-                 * =====================================================
+                 * NPM Pipeline Stage.
                  */
-                $this->runOrSkipConfiguredStage(
-                    output: $output,
-                    deployment: $deployment,
-                    key: 'npm',
-                    stepName: 'Install NPM dependencies',
-                    config: $config
-                );
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.npm.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Install NPM dependencies',
+                        'npm',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Install NPM dependencies',
+                        'NPM pipeline stage is disabled.',
+                        'npm'
+                    );
+                }
 
                 /*
-                 * =====================================================
-                 * FRONTEND BUILD
-                 * =====================================================
+                 * Assets Build Stage.
                  */
-                $this->runOrSkipConfiguredStage(
-                    output: $output,
-                    deployment: $deployment,
-                    key: 'build',
-                    stepName: 'Build frontend assets',
-                    config: $config
-                );
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.build.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Build frontend assets',
+                        'build',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Build frontend assets',
+                        'Build pipeline stage is disabled.',
+                        'build'
+                    );
+                }
 
                 /*
-                 * =====================================================
-                 * DATABASE MIGRATIONS
-                 * =====================================================
+                 * Database Migrations Stage.
                  */
-                $this->runOrSkipConfiguredStage(
-                    output: $output,
-                    deployment: $deployment,
-                    key: 'migrations',
-                    stepName: 'Run database migrations',
-                    config: $config
-                );
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.migrations.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Run database migrations',
+                        'migrations',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Run database migrations',
+                        'Migrations pipeline stage is disabled.',
+                        'migrations'
+                    );
+                }
 
                 /*
-                 * =====================================================
-                 * OPTIMIZE
-                 * =====================================================
+                 * Cache & Framework Optimization Stage.
                  */
-                $this->runOrSkipConfiguredStage(
-                    output: $output,
-                    deployment: $deployment,
-                    key: 'optimize',
-                    stepName: 'Optimize framework caches',
-                    config: $config
-                );
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.optimize.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Optimize framework caches',
+                        'optimize',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Optimize framework caches',
+                        'Optimization stage is disabled.',
+                        'optimize'
+                    );
+                }
 
                 /*
-                 * =====================================================
-                 * QUEUE RESTART
-                 * =====================================================
+                 * Queue Restart Stage.
                  */
-                $this->runOrSkipConfiguredStage(
-                    output: $output,
-                    deployment: $deployment,
-                    key: 'queue_restart',
-                    stepName: 'Restart queue workers',
-                    config: $config
-                );
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.queue_restart.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Restart queue workers',
+                        'queue_restart',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Restart queue workers',
+                        'Queue restart stage is disabled.',
+                        'queue_restart'
+                    );
+                }
 
                 /*
-                 * =====================================================
-                 * HEALTH CHECK
-                 * =====================================================
+                 * Health Check Stage.
                  */
-                $this->runOrSkipConfiguredStage(
-                    output: $output,
-                    deployment: $deployment,
-                    key: 'health_check',
-                    stepName: 'Run health checks',
-                    config: $config
-                );
-
-                /*
-                 * =====================================================
-                 * SUCCESS
-                 * =====================================================
-                 */
+                if (
+                    (bool) data_get(
+                        $config,
+                        'pipeline.health_check.enabled',
+                        true
+                    )
+                ) {
+                    $this->runConfiguredPipelineStep(
+                        $output,
+                        $deployment,
+                        'Run health checks',
+                        'health_check',
+                        $config
+                    );
+                } else {
+                    $this->recordSkippedStep(
+                        $output,
+                        $deployment,
+                        'Run health checks',
+                        'Health check stage is disabled.',
+                        'health_check'
+                    );
+                }
 
                 $completedAt = now();
 
@@ -1214,8 +1228,9 @@ class DeploymentService
                 );
 
                 /*
-                 * Make absolutely sure all enabled stages are
-                 * completed before marking deployment successful.
+                 * Make sure any enabled stage that somehow
+                 * remained pending is not accidentally left
+                 * in that state after a successful deployment.
                  */
                 $deployment = $deployment->fresh();
 
@@ -1225,8 +1240,6 @@ class DeploymentService
                     'completed_at' => $completedAt,
 
                     'duration_seconds' => $duration,
-
-                    'error' => null,
                 ]);
 
                 $this->auditDeployment(
@@ -1236,17 +1249,6 @@ class DeploymentService
                     'success'
                 );
             } catch (Throwable $e) {
-                /*
-                 * Try to identify the currently running stage and
-                 * mark it as failed.
-                 */
-                $deployment = $deployment->fresh();
-
-                $this->markCurrentStageFailed(
-                    $deployment,
-                    $e->getMessage()
-                );
-
                 $failedAt = now();
 
                 $duration = max(
@@ -1276,53 +1278,514 @@ class DeploymentService
                 throw $e;
             }
 
-            return $this->normalizeDeploymentPipeline(
-                $deployment->fresh()
-            );
+            return $deployment->fresh();
         } finally {
             $lock->release();
         }
     }
 
     /**
-     * Run a configured stage or mark it as skipped.
+     * Initialize runtime pipeline metadata.
      */
-    protected function runOrSkipConfiguredStage(
-        array &$output,
-        OperationDeployment $deployment,
-        string $key,
-        string $stepName,
-        array $config
-    ): void {
-        $enabled = (bool) data_get(
-            $config,
-            "pipeline.{$key}.enabled",
-            true
+    protected function initializePipelineMetadata(
+        array $metadata,
+        array $pipeline
+    ): array {
+        $pipelineState = $this->pipelineOverview(
+            $pipeline
         );
 
-        if (! $enabled) {
-            $this->recordSkippedStep(
-                $output,
-                $deployment,
-                $key,
-                $stepName,
-                "{$stepName} is disabled."
-            );
+        foreach ($pipelineState as $key => $stage) {
+            $pipelineState[$key]['status'] =
+                $stage['enabled']
+                    ? 'pending'
+                    : 'skipped';
 
-            return;
+            $pipelineState[$key]['started_at'] = null;
+
+            $pipelineState[$key]['completed_at'] = null;
+
+            $pipelineState[$key]['message'] = null;
         }
 
-        $this->runConfiguredPipelineStep(
-            $output,
-            $deployment,
-            $stepName,
-            $key,
-            $config
-        );
+        $metadata['pipeline'] = $pipelineState;
+
+        return $metadata;
     }
 
     /**
-     * Run a configured pipeline step.
+     * Update the runtime status of a pipeline stage.
+     */
+    protected function updatePipelineStatus(
+        OperationDeployment $deployment,
+        string $key,
+        string $status,
+        ?string $message = null
+    ): void {
+        $metadata = $deployment->metadata ?? [];
+
+        $pipeline = $metadata['pipeline'] ?? [];
+
+        if (! isset($pipeline[$key])) {
+            $pipeline[$key] = [
+                'enabled' => true,
+            ];
+        }
+
+        $pipeline[$key]['status'] = $status;
+
+        if ($message !== null) {
+            $pipeline[$key]['message'] = $message;
+        }
+
+        if ($status === 'running') {
+            $pipeline[$key]['started_at'] =
+                now()->toIso8601String();
+
+            $pipeline[$key]['completed_at'] = null;
+        }
+
+        if (
+            in_array(
+                $status,
+                [
+                    'completed',
+                    'failed',
+                    'skipped',
+                ],
+                true
+            )
+        ) {
+            $pipeline[$key]['completed_at'] =
+                now()->toIso8601String();
+        }
+
+        $metadata['pipeline'] = $pipeline;
+
+        $deployment->update([
+            'metadata' => $metadata,
+        ]);
+    }
+
+    /**
+     * Get the Git files changed between two commits.
+     *
+     * If there is no previous deployment commit, the method
+     * compares the first available commit against the deployed
+     * commit so the deployment still has useful file information.
+     */
+    protected function getChangedFiles(
+        string $path,
+        ?string $previousCommit,
+        string $deployedCommit
+    ): array {
+        if (! $deployedCommit) {
+            return [
+                'total' => 0,
+                'additions' => 0,
+                'deletions' => 0,
+                'files' => [],
+            ];
+        }
+
+        /*
+         * First deployment.
+         *
+         * There is no previous successful deployment to compare
+         * against, so use the parent of the deployed commit when
+         * available.
+         */
+        if (! $previousCommit) {
+            $parentResult = $this->runCommand(
+                [
+                    'git',
+                    'rev-parse',
+                    $deployedCommit . '^',
+                ],
+                $path,
+                30
+            );
+
+            if ($parentResult->successful()) {
+                $previousCommit = trim(
+                    $parentResult->output()
+                );
+            }
+        }
+
+        /*
+         * If there is still no previous commit, there is nothing
+         * useful to diff against.
+         */
+        if (! $previousCommit) {
+            return [
+                'total' => 0,
+                'additions' => 0,
+                'deletions' => 0,
+                'files' => [],
+            ];
+        }
+
+        /*
+         * Name-status gives us:
+         *
+         * A = Added
+         * M = Modified
+         * D = Deleted
+         * R = Renamed
+         */
+        $nameStatus = $this->runCommand(
+            [
+                'git',
+                'diff',
+                '--name-status',
+                '-M',
+                $previousCommit,
+                $deployedCommit,
+            ],
+            $path,
+            60
+        );
+
+        /*
+         * Numstat gives us additions/deletions.
+         */
+        $numstat = $this->runCommand(
+            [
+                'git',
+                'diff',
+                '--numstat',
+                '-M',
+                $previousCommit,
+                $deployedCommit,
+            ],
+            $path,
+            60
+        );
+
+        if (! $nameStatus->successful()) {
+            Log::channel('daily')->warning(
+                'Unable to calculate deployment changed files.',
+                [
+                    'previous_commit' => $previousCommit,
+                    'deployed_commit' => $deployedCommit,
+                    'error' => trim(
+                        $nameStatus->errorOutput()
+                    ),
+                ]
+            );
+
+            return [
+                'total' => 0,
+                'additions' => 0,
+                'deletions' => 0,
+                'files' => [],
+            ];
+        }
+
+        $numstatMap = $this->parseGitNumstat(
+            $numstat->successful()
+                ? $numstat->output()
+                : ''
+        );
+
+        $files = [];
+
+        foreach (
+            preg_split(
+                '/\r\n|\r|\n/',
+                trim($nameStatus->output())
+            ) ?: []
+            as $line
+        ) {
+            $line = trim($line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            /*
+             * Git name-status can contain tabs.
+             */
+            $parts = explode(
+                "\t",
+                $line
+            );
+
+            $statusCode = $parts[0] ?? '';
+
+            $status = 'modified';
+
+            $oldPath = null;
+
+            $pathName = $parts[1] ?? '';
+
+            switch (true) {
+                case str_starts_with(
+                    $statusCode,
+                    'A'
+                ):
+                    $status = 'added';
+                    $pathName = $parts[1] ?? '';
+                    break;
+
+                case str_starts_with(
+                    $statusCode,
+                    'D'
+                ):
+                    $status = 'deleted';
+                    $pathName = $parts[1] ?? '';
+                    break;
+
+                case str_starts_with(
+                    $statusCode,
+                    'R'
+                ):
+                    $status = 'renamed';
+
+                    $oldPath = $parts[1] ?? null;
+
+                    $pathName = $parts[2] ?? '';
+                    break;
+
+                case str_starts_with(
+                    $statusCode,
+                    'C'
+                ):
+                    $status = 'copied';
+
+                    $oldPath = $parts[1] ?? null;
+
+                    $pathName = $parts[2] ?? '';
+                    break;
+
+                case str_starts_with(
+                    $statusCode,
+                    'M'
+                ):
+                default:
+                    $status = 'modified';
+                    $pathName = $parts[1] ?? '';
+                    break;
+            }
+
+            /*
+             * Git can occasionally output quoted paths.
+             */
+            $pathName = $this->cleanGitPath(
+                $pathName
+            );
+
+            if ($oldPath !== null) {
+                $oldPath = $this->cleanGitPath(
+                    $oldPath
+                );
+            }
+
+            $stats = $numstatMap[$pathName] ?? [
+                'additions' => 0,
+                'deletions' => 0,
+            ];
+
+            $files[] = [
+                'path' => $pathName,
+
+                'old_path' => $oldPath,
+
+                'status' => $status,
+
+                'additions' => $stats['additions'],
+
+                'deletions' => $stats['deletions'],
+            ];
+        }
+
+        return [
+            'total' => count($files),
+
+            'additions' => array_sum(
+                array_column(
+                    $files,
+                    'additions'
+                )
+            ),
+
+            'deletions' => array_sum(
+                array_column(
+                    $files,
+                    'deletions'
+                )
+            ),
+
+            'files' => $files,
+        ];
+    }
+
+    /**
+     * Parse Git numstat output.
+     */
+    protected function parseGitNumstat(
+        string $output
+    ): array {
+        $map = [];
+
+        foreach (
+            preg_split(
+                '/\r\n|\r|\n/',
+                trim($output)
+            ) ?: []
+            as $line
+        ) {
+            $line = trim($line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $parts = explode(
+                "\t",
+                $line
+            );
+
+            if (count($parts) < 3) {
+                continue;
+            }
+
+            $additions = $parts[0];
+
+            $deletions = $parts[1];
+
+            $path = $parts[2];
+
+            /*
+             * Binary files are represented by "-".
+             */
+            $additions = $additions === '-'
+                ? 0
+                : (int) $additions;
+
+            $deletions = $deletions === '-'
+                ? 0
+                : (int) $deletions;
+
+            $path = $this->cleanGitPath(
+                $path
+            );
+
+            $map[$path] = [
+                'additions' => $additions,
+
+                'deletions' => $deletions,
+            ];
+        }
+
+        return $map;
+    }
+
+    /**
+     * Clean a Git path returned by command output.
+     */
+    protected function cleanGitPath(
+        string $path
+    ): string {
+        $path = trim($path);
+
+        if (
+            strlen($path) >= 2 &&
+            $path[0] === '"' &&
+            $path[
+                strlen($path) - 1
+            ] === '"'
+        ) {
+            $path = substr(
+                $path,
+                1,
+                -1
+            );
+
+            /*
+             * Git quotes special characters.
+             */
+            $path = preg_replace_callback(
+                '/\\\\([0-7]{3})/',
+                static function ($matches) {
+                    return chr(
+                        octdec(
+                            $matches[1]
+                        )
+                    );
+                },
+                $path
+            ) ?? $path;
+        }
+
+        return $path;
+    }
+
+    /**
+     * Validate the branch name.
+     */
+    protected function validateBranch(
+        string $branch
+    ): void {
+        if (
+            empty($branch) ||
+            ! preg_match(
+                '/^[a-zA-Z0-9_\-\.\/]+$/',
+                $branch
+            )
+        ) {
+            throw new RuntimeException(
+                "Invalid branch name format: [{$branch}]"
+            );
+        }
+    }
+
+    /**
+     * Check executable status for preflight.
+     */
+    protected function executableCheck(
+        string $name,
+        array $command,
+        string $path,
+        bool $required = true
+    ): array {
+        if (! $required) {
+            return [
+                'status' => 'skipped',
+
+                'message' =>
+                    "{$name} check skipped (not required).",
+            ];
+        }
+
+        $result = $this->runCommand(
+            $command,
+            $path,
+            15
+        );
+
+        return [
+            'status' => $result->successful()
+                ? 'healthy'
+                : 'failed',
+
+            'message' => $result->successful()
+                ? "{$name} is installed and executable."
+                : "{$name} check failed or executable not found.",
+
+            'output' => trim(
+                $result->output()
+            ),
+
+            'error' => trim(
+                $result->errorOutput()
+            ),
+        ];
+    }
+
+    /**
+     * Helper to run configured steps with custom fallback commands.
      */
     protected function runConfiguredPipelineStep(
         array &$output,
@@ -1394,7 +1857,7 @@ class DeploymentService
         }
 
         /*
-         * Resolve configured command.
+         * Resolve the configured command to the actual executable.
          */
         $command = $this->resolvePipelineCommand(
             $key,
@@ -1402,18 +1865,12 @@ class DeploymentService
             $config
         );
 
-        /*
-         * Step-specific timeout.
-         */
         $timeout = (int) data_get(
             $config,
             "pipeline.{$key}.timeout",
             $config['timeout']
         );
 
-        /*
-         * Execute the stage.
-         */
         $this->runDeploymentStep(
             $output,
             $deployment,
@@ -1446,13 +1903,7 @@ class DeploymentService
             ],
 
             /*
-             * NPM:
-             *
-             * npm ci
-             *
-             * becomes:
-             *
-             * node.exe npm-cli.js ci
+             * NPM dependencies.
              */
             'npm' => [
                 $binaries['node'],
@@ -1461,13 +1912,7 @@ class DeploymentService
             ],
 
             /*
-             * Build:
-             *
-             * npm run build
-             *
-             * becomes:
-             *
-             * node.exe npm-cli.js run build
+             * Frontend build.
              */
             'build' => [
                 $binaries['node'],
@@ -1503,13 +1948,56 @@ class DeploymentService
     }
 
     /**
-     * Run one deployment command.
+     * Record a skipped stage in the deployment log.
+     */
+    protected function recordSkippedStep(
+        array &$output,
+        OperationDeployment $deployment,
+        string $stepName,
+        string $reason,
+        ?string $pipelineKey = null
+    ): void {
+        $timestamp = now()->format(
+            'Y-m-d H:i:s'
+        );
+
+        $output[] =
+            "[{$timestamp}] Skipped step: {$stepName}";
+
+        $output[] = $reason;
+
+        $deployment->update([
+            'output' => implode(
+                PHP_EOL . PHP_EOL,
+                $output
+            ),
+        ]);
+
+        if ($pipelineKey) {
+            $this->updatePipelineStatus(
+                $deployment,
+                $pipelineKey,
+                'skipped',
+                $reason
+            );
+        }
+    }
+
+    /**
+     * Run a single deployment step.
      *
-     * The important part here is that the pipeline status is updated
-     * BEFORE the command starts and AFTER it completes.
+     * A stage can contain multiple commands.
      *
-     * That allows the frontend to poll the deployment record and
-     * display real runtime progress.
+     * Example:
+     *
+     * Git:
+     *     verify
+     *     fetch
+     *     checkout
+     *     pull
+     *
+     * The stage remains "running" until the final command
+     * completes successfully.
      */
     protected function runDeploymentStep(
         array &$output,
@@ -1521,616 +2009,111 @@ class DeploymentService
         ?string $pipelineKey = null,
         bool $completeStage = true
     ): void {
-        /*
-         * Mark stage as running BEFORE executing the command.
-         */
         if ($pipelineKey) {
             $this->updatePipelineStatus(
                 $deployment,
                 $pipelineKey,
                 'running',
-                $stepName
+                "Running {$stepName}."
             );
         }
 
         $timestamp = now()->format(
             'Y-m-d H:i:s'
-        );
-
-        /*
-         * Make the command readable in the deployment log.
-         */
-        $commandString = implode(
-            ' ',
-            array_map(
-                static fn ($value) => (string) $value,
-                $command
-            )
         );
 
         $output[] =
             "[{$timestamp}] Starting step: {$stepName}";
 
+        /*
+         * Record the actual command for easier debugging.
+         */
         $output[] =
-            "Command: {$commandString}";
-
-        /*
-         * Save immediately so the UI can see the stage.
-         */
-        $this->saveOutput(
-            $deployment,
-            $output
-        );
-
-        try {
-            /*
-             * Execute the actual process.
-             */
-            $result = $this->runCommand(
-                $command,
-                $path,
-                $timeout
-            );
-
-            /*
-             * Capture stdout.
-             */
-            if ($result->output()) {
-                $output[] = trim(
-                    $result->output()
-                );
-            }
-
-            /*
-             * Capture stderr.
-             */
-            if ($result->errorOutput()) {
-                $output[] = trim(
-                    $result->errorOutput()
-                );
-            }
-
-            /*
-             * Save process output.
-             */
-            $this->saveOutput(
-                $deployment,
-                $output
-            );
-
-            /*
-             * Command failed.
-             */
-            if (! $result->successful()) {
-                $errorMessage = trim(
-                    $result->errorOutput()
-                    ?: $result->output()
-                );
-
-                if ($errorMessage === '') {
-                    $errorMessage =
-                        "Process exited with code {$result->exitCode()}.";
-                }
-
-                if ($pipelineKey) {
-                    $this->updatePipelineStatus(
-                        $deployment,
-                        $pipelineKey,
-                        'failed',
-                        "{$stepName} failed."
-                    );
-                }
-
-                throw new RuntimeException(
-                    "Deployment step [{$stepName}] failed: " .
-                    $errorMessage
-                );
-            }
-
-            /*
-             * Command succeeded.
-             */
-            $completedTimestamp = now()->format(
-                'Y-m-d H:i:s'
-            );
-
-            $output[] =
-                "[{$completedTimestamp}] Completed step: {$stepName}";
-
-            $this->saveOutput(
-                $deployment,
-                $output
-            );
-
-            /*
-             * Only mark the stage completed when requested.
-             *
-             * Git uses several commands but should appear as one
-             * stage in the UI.
-             */
-            if (
-                $pipelineKey &&
-                $completeStage
-            ) {
-                $this->updatePipelineStatus(
-                    $deployment,
-                    $pipelineKey,
-                    'completed',
-                    "{$stepName} completed successfully."
-                );
-            }
-        } catch (Throwable $e) {
-            /*
-             * Make sure the stage is marked failed.
-             */
-            if ($pipelineKey) {
-                $this->updatePipelineStatus(
-                    $deployment,
-                    $pipelineKey,
-                    'failed',
-                    $e->getMessage()
-                );
-            }
-
-            /*
-             * Make sure output is persisted.
-             */
-            $this->saveOutput(
-                $deployment,
-                $output
-            );
-
-            throw $e;
-        }
-    }
-
-    /**
-     * Record a skipped pipeline stage.
-     */
-    protected function recordSkippedStep(
-        array &$output,
-        OperationDeployment $deployment,
-        string $key,
-        string $stepName,
-        string $reason
-    ): void {
-        $timestamp = now()->format(
-            'Y-m-d H:i:s'
-        );
-
-        /*
-         * Mark runtime stage as skipped.
-         */
-        $this->updatePipelineStatus(
-            $deployment,
-            $key,
-            'skipped',
-            $reason
-        );
-
-        $output[] =
-            "[{$timestamp}] Skipped step: {$stepName}";
-
-        $output[] =
-            $reason;
-
-        $this->saveOutput(
-            $deployment,
-            $output
-        );
-    }
-
-    /**
-     * Initialize the runtime pipeline metadata.
-     *
-     * Example:
-     *
-     * pipeline:
-     *   git:
-     *     enabled: true
-     *     status: pending
-     *
-     *   composer:
-     *     enabled: true
-     *     status: pending
-     */
-    protected function initializePipelineMetadata(
-        array $metadata,
-        array $pipelineConfig
-    ): array {
-        $pipeline = [];
-
-        /*
-         * Git is always enabled because every deployment
-         * needs Git operations.
-         */
-        $pipeline['git'] = [
-            'enabled' => true,
-
-            'status' => 'pending',
-
-            'message' => null,
-
-            'started_at' => null,
-
-            'completed_at' => null,
-
-            'updated_at' =>
-                now()->toIso8601String(),
-        ];
-
-        /*
-         * Configurable stages.
-         */
-        foreach ([
-            'composer',
-            'npm',
-            'build',
-            'migrations',
-            'optimize',
-            'queue_restart',
-            'health_check',
-        ] as $key) {
-            $enabled = (bool) data_get(
-                $pipelineConfig,
-                "{$key}.enabled",
-                true
-            );
-
-            $pipeline[$key] = [
-                'enabled' => $enabled,
-
-                'status' => $enabled
-                    ? 'pending'
-                    : 'skipped',
-
-                'message' => $enabled
-                    ? null
-                    : ucfirst(
-                        str_replace(
-                            '_',
-                            ' ',
-                            $key
-                        )
-                    ) . ' is disabled.',
-
-                'started_at' => null,
-
-                'completed_at' => null,
-
-                'updated_at' =>
-                    now()->toIso8601String(),
-            ];
-        }
-
-        $metadata['pipeline'] = $pipeline;
-
-        return $metadata;
-    }
-
-    /**
-     * Update one runtime pipeline stage.
-     */
-    protected function updatePipelineStatus(
-        OperationDeployment $deployment,
-        string $key,
-        string $status,
-        ?string $message = null
-    ): void {
-        /*
-         * Always work with the latest database record.
-         *
-         * This is important because the deployment is being
-         * polled by the frontend while the worker is executing.
-         */
-        $deployment = $deployment->fresh();
-
-        if (! $deployment) {
-            return;
-        }
-
-        $metadata = $deployment->metadata ?? [];
-
-        $pipeline = $metadata['pipeline'] ?? [];
-
-        /*
-         * Preserve existing stage information.
-         */
-        $stage = is_array(
-            $pipeline[$key] ?? null
-        )
-            ? $pipeline[$key]
-            : [];
-
-        /*
-         * Preserve enabled state.
-         */
-        $stage['enabled'] = (bool) (
-            $stage['enabled'] ?? true
-        );
-
-        /*
-         * Runtime status.
-         */
-        $stage['status'] = $status;
-
-        /*
-         * Current update time.
-         */
-        $stage['updated_at'] =
-            now()->toIso8601String();
-
-        /*
-         * Running timestamp.
-         */
-        if (
-            $status === 'running' &&
-            empty($stage['started_at'])
-        ) {
-            $stage['started_at'] =
-                now()->toIso8601String();
-        }
-
-        /*
-         * Completed timestamp.
-         */
-        if (
-            in_array(
-                $status,
-                [
-                    'completed',
-                    'failed',
-                    'skipped',
-                ],
-                true
-            )
-        ) {
-            $stage['completed_at'] =
-                now()->toIso8601String();
-        }
-
-        /*
-         * Store message.
-         */
-        if ($message !== null) {
-            $stage['message'] = $message;
-        }
-
-        $pipeline[$key] = $stage;
-
-        $metadata['pipeline'] = $pipeline;
-
-        /*
-         * Save immediately.
-         */
-        $deployment->update([
-            'metadata' => $metadata,
-        ]);
-    }
-
-    /**
-     * Mark the currently running stage as failed.
-     *
-     * This is a safety net for unexpected exceptions.
-     */
-    protected function markCurrentStageFailed(
-        OperationDeployment $deployment,
-        string $message
-    ): void {
-        $metadata = $deployment->metadata ?? [];
-
-        $pipeline = $metadata['pipeline'] ?? [];
-
-        foreach ($pipeline as $key => $stage) {
-            if (
-                ! is_array($stage)
-            ) {
-                continue;
-            }
-
-            if (
-                ($stage['status'] ?? null) === 'running'
-            ) {
-                $this->updatePipelineStatus(
-                    $deployment,
-                    $key,
-                    'failed',
-                    $message
-                );
-
-                return;
-            }
-        }
-    }
-
-    /**
-     * Normalize a deployment's pipeline structure.
-     *
-     * This also makes older deployment records compatible with
-     * the new UI.
-     */
-    protected function normalizeDeploymentPipeline(
-        OperationDeployment $deployment
-    ): OperationDeployment {
-        $metadata = $deployment->metadata ?? [];
-
-        $pipeline = $metadata['pipeline'] ?? [];
-
-        /*
-         * Older deployments may have only:
-         *
-         * composer:
-         *   enabled: true
-         *
-         * Convert those to:
-         *
-         * composer:
-         *   enabled: true
-         *   status: pending
-         */
-        foreach ($this->pipelineStages as $key) {
-            if (
-                ! isset($pipeline[$key]) ||
-                ! is_array($pipeline[$key])
-            ) {
-                $pipeline[$key] = [
-                    'enabled' => $key === 'git'
-                        ? true
-                        : (bool) data_get(
-                            $this->config(),
-                            "pipeline.{$key}.enabled",
-                            true
-                        ),
-
-                    'status' => 'pending',
-
-                    'message' => null,
-
-                    'started_at' => null,
-
-                    'completed_at' => null,
-
-                    'updated_at' =>
-                        now()->toIso8601String(),
-                ];
-
-                continue;
-            }
-
-            /*
-             * Older records.
-             */
-            if (
-                ! isset(
-                    $pipeline[$key]['status']
+            'Command: ' .
+            implode(
+                ' ',
+                array_map(
+                    static fn ($value) => (string) $value,
+                    $command
                 )
-            ) {
-                $pipeline[$key]['status'] =
-                    'pending';
-            }
+            );
 
-            if (
-                ! array_key_exists(
-                    'message',
-                    $pipeline[$key]
-                )
-            ) {
-                $pipeline[$key]['message'] =
-                    null;
-            }
-
-            if (
-                ! array_key_exists(
-                    'started_at',
-                    $pipeline[$key]
-                )
-            ) {
-                $pipeline[$key]['started_at'] =
-                    null;
-            }
-
-            if (
-                ! array_key_exists(
-                    'completed_at',
-                    $pipeline[$key]
-                )
-            ) {
-                $pipeline[$key]['completed_at'] =
-                    null;
-            }
-        }
-
-        /*
-         * Put normalized pipeline back onto the model.
-         *
-         * We don't save here because this method is also used
-         * by read-only API requests.
-         */
-        $metadata['pipeline'] = $pipeline;
-
-        $deployment->setAttribute(
-            'metadata',
-            $metadata
-        );
-
-        return $deployment;
-    }
-
-    /**
-     * Save deployment output.
-     */
-    protected function saveOutput(
-        OperationDeployment $deployment,
-        array $output
-    ): void {
         $deployment->update([
             'output' => implode(
                 PHP_EOL . PHP_EOL,
                 $output
             ),
         ]);
-    }
-
-    /**
-     * Validate the branch name.
-     */
-    protected function validateBranch(
-        string $branch
-    ): void {
-        if (
-            empty($branch) ||
-            ! preg_match(
-                '/^[a-zA-Z0-9_\-\.\/]+$/',
-                $branch
-            )
-        ) {
-            throw new RuntimeException(
-                "Invalid branch name format: [{$branch}]"
-            );
-        }
-    }
-
-    /**
-     * Check executable status for preflight.
-     */
-    protected function executableCheck(
-        string $name,
-        array $command,
-        string $path,
-        bool $required = true
-    ): array {
-        if (! $required) {
-            return [
-                'status' => 'skipped',
-
-                'message' =>
-                    "{$name} check skipped (not required).",
-            ];
-        }
 
         $result = $this->runCommand(
             $command,
             $path,
-            15
+            $timeout
         );
 
-        return [
-            'status' => $result->successful()
-                ? 'healthy'
-                : 'failed',
-
-            'message' => $result->successful()
-                ? "{$name} is installed and executable."
-                : "{$name} check failed or executable not found.",
-
-            'output' => trim(
+        if ($result->output()) {
+            $output[] = trim(
                 $result->output()
-            ),
+            );
+        }
 
-            'error' => trim(
+        if ($result->errorOutput()) {
+            $output[] = trim(
                 $result->errorOutput()
+            );
+        }
+
+        $deployment->update([
+            'output' => implode(
+                PHP_EOL . PHP_EOL,
+                $output
             ),
-        ];
+        ]);
+
+        if (! $result->successful()) {
+            if ($pipelineKey) {
+                $this->updatePipelineStatus(
+                    $deployment,
+                    $pipelineKey,
+                    'failed',
+                    "Deployment step [{$stepName}] failed."
+                );
+            }
+
+            throw new RuntimeException(
+                "Deployment step [{$stepName}] failed: " .
+                trim(
+                    $result->errorOutput()
+                    ?: $result->output()
+                )
+            );
+        }
+
+        $completedTimestamp = now()->format(
+            'Y-m-d H:i:s'
+        );
+
+        $output[] =
+            "[{$completedTimestamp}] Completed step: {$stepName}";
+
+        $deployment->update([
+            'output' => implode(
+                PHP_EOL . PHP_EOL,
+                $output
+            ),
+        ]);
+
+        if (
+            $pipelineKey &&
+            $completeStage
+        ) {
+            $this->updatePipelineStatus(
+                $deployment,
+                $pipelineKey,
+                'completed',
+                "Completed {$stepName}."
+            );
+        }
     }
 
     /**
@@ -2221,7 +2204,7 @@ class DeploymentService
         );
 
         /*
-         * Preserve existing PATH.
+         * Preserve the existing system PATH.
          */
         $existingPath = getenv('PATH') ?: '';
 
@@ -2269,43 +2252,55 @@ class DeploymentService
                 : ':';
 
         return [
+            /*
+             * Explicit executable PATH.
+             */
             'PATH' => implode(
                 $separator,
                 $pathParts
             ),
 
+            /*
+             * Node module lookup.
+             */
             'NODE_PATH' =>
                 $this->binaryDirectory(
                     $config['binaries']['node']
                 ) ?? '',
 
             /*
-             * Preserve the Node compatibility setting that
-             * was previously used for your Windows environment.
+             * Preserve existing Node compatibility.
              */
             'NODE_OPTIONS' =>
                 '--openssl-legacy-provider',
 
+            /*
+             * Explicit PHP executable.
+             */
             'PHP_BINARY' =>
                 $config['binaries']['php'],
 
-            'TEMP' =>
-                $tempDirectory,
+            /*
+             * Writable temporary directory.
+             */
+            'TEMP' => $tempDirectory,
 
-            'TMP' =>
-                $tempDirectory,
+            'TMP' => $tempDirectory,
 
-            'TMPDIR' =>
-                $tempDirectory,
+            'TMPDIR' => $tempDirectory,
 
+            /*
+             * Dedicated npm cache.
+             */
             'npm_config_cache' =>
                 $npmCacheDirectory,
 
-            'HOME' =>
-                $homeDirectory,
+            /*
+             * Dedicated npm home.
+             */
+            'HOME' => $homeDirectory,
 
-            'USERPROFILE' =>
-                $homeDirectory,
+            'USERPROFILE' => $homeDirectory,
         ];
     }
 
@@ -2315,9 +2310,7 @@ class DeploymentService
     protected function binaryDirectory(
         string $binary
     ): ?string {
-        $binary = trim(
-            $binary
-        );
+        $binary = trim($binary);
 
         if ($binary === '') {
             return null;
@@ -2352,13 +2345,7 @@ class DeploymentService
     }
 
     /**
-     * Split PATH correctly.
-     *
-     * Windows:
-     * ;
-     *
-     * Linux:
-     * :
+     * Split PATH correctly for Windows/Linux.
      */
     protected function splitWindowsPath(
         string $path

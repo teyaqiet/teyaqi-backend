@@ -5,7 +5,7 @@
     x-transition.opacity
 >
     <div
-        class="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        class="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
         @click.outside="closeDetailsModal()"
         x-transition
     >
@@ -16,7 +16,7 @@
 
                 <div class="flex items-start gap-4">
 
-                    {{-- File icon --}}
+                    {{-- Deployment icon --}}
                     <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gray-100">
                         <svg
                             class="h-5 w-5 text-gray-600"
@@ -183,7 +183,7 @@
 
                         <div class="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-4">
 
-                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 
                                 <div class="min-w-0">
                                     <p class="text-xs text-gray-500">
@@ -196,7 +196,7 @@
                                     ></code>
                                 </div>
 
-                                <div class="sm:text-right">
+                                <div class="sm:max-w-[50%] sm:text-right">
                                     <p class="text-xs text-gray-500">
                                         Message
                                     </p>
@@ -210,6 +210,326 @@
                             </div>
 
                         </div>
+                    </div>
+
+                    {{-- Changed Files --}}
+                    <div>
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-900">
+                                    Changed Files
+                                </h3>
+
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Files changed between the previous and deployed commit.
+                                </p>
+                            </div>
+
+                            {{-- Change Summary --}}
+                            <div
+                                class="flex flex-wrap items-center gap-2"
+                                x-show="selectedDeployment.metadata?.git?.changed_files"
+                            >
+
+                                {{-- Files --}}
+                                <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                    <span
+                                        x-text="selectedDeployment.metadata?.git?.changed_files?.total ?? 0"
+                                    ></span>
+
+                                    <span class="ml-1">
+                                        files
+                                    </span>
+                                </span>
+
+                                {{-- Additions --}}
+                                <span class="inline-flex items-center rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+                                    +
+                                    <span
+                                        class="ml-0.5"
+                                        x-text="selectedDeployment.metadata?.git?.changed_files?.additions ?? 0"
+                                    ></span>
+                                </span>
+
+                                {{-- Deletions --}}
+                                <span class="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                                    −
+                                    <span
+                                        class="ml-0.5"
+                                        x-text="selectedDeployment.metadata?.git?.changed_files?.deletions ?? 0"
+                                    ></span>
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                        {{-- No changed files data --}}
+                        <template
+                            x-if="!selectedDeployment.metadata?.git?.changed_files"
+                        >
+                            <div class="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-5 text-center">
+                                <p class="text-sm text-gray-500">
+                                    No changed-file information is available for this deployment.
+                                </p>
+                            </div>
+                        </template>
+
+                        {{-- Changed files available --}}
+                        <template
+                            x-if="selectedDeployment.metadata?.git?.changed_files"
+                        >
+                            <div class="mt-3 overflow-hidden rounded-lg border border-gray-200">
+
+                                {{-- Previous / current commit --}}
+                                <div class="border-b border-gray-100 bg-gray-50 px-4 py-3">
+
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                                        <div class="min-w-0">
+                                            <p class="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                                                Previous Commit
+                                            </p>
+
+                                            <code
+                                                class="mt-1 block truncate text-xs text-gray-600"
+                                                x-text="selectedDeployment.metadata?.git?.previous_commit || 'First deployment'"
+                                                :title="selectedDeployment.metadata?.git?.previous_commit || 'First deployment'"
+                                            ></code>
+                                        </div>
+
+                                        <div class="min-w-0 sm:text-right">
+                                            <p class="text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                                                Deployed Commit
+                                            </p>
+
+                                            <code
+                                                class="mt-1 block truncate text-xs text-gray-600"
+                                                x-text="selectedDeployment.metadata?.git?.deployed_commit || selectedDeployment.commit_hash || '—'"
+                                                :title="selectedDeployment.metadata?.git?.deployed_commit || selectedDeployment.commit_hash || '—'"
+                                            ></code>
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                                {{-- Files --}}
+                                <div class="divide-y divide-gray-100">
+
+                                    <template
+                                        x-for="(file, index) in (selectedDeployment.metadata?.git?.changed_files?.files || [])"
+                                        :key="index"
+                                    >
+
+                                        <div class="px-4 py-3 transition hover:bg-gray-50">
+
+                                            <div class="flex items-start gap-3">
+
+                                                {{-- Status Icon --}}
+                                                <div
+                                                    class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+                                                    :class="{
+                                                        'bg-green-50 text-green-600': file.status === 'added',
+                                                        'bg-blue-50 text-blue-600': file.status === 'modified',
+                                                        'bg-red-50 text-red-600': file.status === 'deleted',
+                                                        'bg-purple-50 text-purple-600': file.status === 'renamed',
+                                                        'bg-indigo-50 text-indigo-600': file.status === 'copied'
+                                                    }"
+                                                >
+
+                                                    {{-- Added --}}
+                                                    <svg
+                                                        x-show="file.status === 'added'"
+                                                        class="h-4 w-4"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke-width="2"
+                                                        stroke="currentColor"
+                                                    >
+                                                        <path
+                                                            stroke-linecap="round"
+                                                            stroke-linejoin="round"
+                                                            d="M12 5v14m-7-7h14"
+                                                        />
+                                                    </svg>
+
+                                                    {{-- Modified --}}
+                                                    <svg
+                                                        x-show="file.status === 'modified'"
+                                                        class="h-4 w-4"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke-width="2"
+                                                        stroke="currentColor"
+                                                    >
+                                                        <path
+                                                            stroke-linecap="round"
+                                                            stroke-linejoin="round"
+                                                            d="M16.862 4.487 19.5 7.125m-2.638-2.638a2.25 2.25 0 0 1 3.182 3.182L8.25 19.563 4.5 20.25l.688-3.75L16.862 4.487Z"
+                                                        />
+                                                    </svg>
+
+                                                    {{-- Deleted --}}
+                                                    <svg
+                                                        x-show="file.status === 'deleted'"
+                                                        class="h-4 w-4"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke-width="2"
+                                                        stroke="currentColor"
+                                                    >
+                                                        <path
+                                                            stroke-linecap="round"
+                                                            stroke-linejoin="round"
+                                                            d="M6 6l12 12M18 6 6 18"
+                                                        />
+                                                    </svg>
+
+                                                    {{-- Renamed --}}
+                                                    <svg
+                                                        x-show="file.status === 'renamed'"
+                                                        class="h-4 w-4"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke-width="2"
+                                                        stroke="currentColor"
+                                                    >
+                                                        <path
+                                                            stroke-linecap="round"
+                                                            stroke-linejoin="round"
+                                                            d="M7.5 7.5h9m0 0-3-3m3 3-3 3M16.5 16.5h-9m0 0 3-3m-3 3 3 3"
+                                                        />
+                                                    </svg>
+
+                                                    {{-- Copied --}}
+                                                    <svg
+                                                        x-show="file.status === 'copied'"
+                                                        class="h-4 w-4"
+                                                        fill="none"
+                                                        viewBox="0 0 24 24"
+                                                        stroke-width="2"
+                                                        stroke="currentColor"
+                                                    >
+                                                        <rect
+                                                            x="8"
+                                                            y="8"
+                                                            width="11"
+                                                            height="11"
+                                                            rx="2"
+                                                        />
+                                                        <path
+                                                            stroke-linecap="round"
+                                                            stroke-linejoin="round"
+                                                            d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"
+                                                        />
+                                                    </svg>
+
+                                                </div>
+
+                                                {{-- File information --}}
+                                                <div class="min-w-0 flex-1">
+
+                                                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+                                                        <div class="min-w-0">
+
+                                                            {{-- Current path --}}
+                                                            <code
+                                                                class="block break-all text-xs font-medium text-gray-800"
+                                                                x-text="file.path || 'Unknown file'"
+                                                            ></code>
+
+                                                            {{-- Old path for rename --}}
+                                                            <template
+                                                                x-if="file.status === 'renamed' && file.old_path"
+                                                            >
+                                                                <p class="mt-1 text-[11px] text-gray-400">
+                                                                    <span>from</span>
+
+                                                                    <code
+                                                                        class="ml-1 break-all"
+                                                                        x-text="file.old_path"
+                                                                    ></code>
+                                                                </p>
+                                                            </template>
+
+                                                        </div>
+
+                                                        {{-- Status --}}
+                                                        <span
+                                                            class="inline-flex w-fit shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold"
+                                                            :class="{
+                                                                'bg-green-50 text-green-700': file.status === 'added',
+                                                                'bg-blue-50 text-blue-700': file.status === 'modified',
+                                                                'bg-red-50 text-red-700': file.status === 'deleted',
+                                                                'bg-purple-50 text-purple-700': file.status === 'renamed',
+                                                                'bg-indigo-50 text-indigo-700': file.status === 'copied'
+                                                            }"
+                                                            x-text="formatStatus(file.status)"
+                                                        ></span>
+
+                                                    </div>
+
+                                                    {{-- Line changes --}}
+                                                    <div class="mt-2 flex items-center gap-3 text-[11px]">
+
+                                                        <span
+                                                            class="font-medium text-green-600"
+                                                            x-show="Number(file.additions || 0) > 0"
+                                                        >
+                                                            +
+                                                            <span
+                                                                x-text="file.additions || 0"
+                                                            ></span>
+                                                            additions
+                                                        </span>
+
+                                                        <span
+                                                            class="font-medium text-red-600"
+                                                            x-show="Number(file.deletions || 0) > 0"
+                                                        >
+                                                            −
+                                                            <span
+                                                                x-text="file.deletions || 0"
+                                                            ></span>
+                                                            deletions
+                                                        </span>
+
+                                                        <span
+                                                            class="text-gray-400"
+                                                            x-show="Number(file.additions || 0) === 0 && Number(file.deletions || 0) === 0"
+                                                        >
+                                                            No line statistics available
+                                                        </span>
+
+                                                    </div>
+
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                    </template>
+
+                                    {{-- No files --}}
+                                    <template
+                                        x-if="(selectedDeployment.metadata?.git?.changed_files?.files || []).length === 0"
+                                    >
+                                        <div class="p-6 text-center">
+                                            <p class="text-sm text-gray-500">
+                                                No files were changed between these commits.
+                                            </p>
+                                        </div>
+                                    </template>
+
+                                </div>
+
+                            </div>
+                        </template>
+
                     </div>
 
                     {{-- Timeline --}}
