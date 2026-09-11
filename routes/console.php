@@ -43,6 +43,25 @@ Schedule::job(
 
 /*
 |--------------------------------------------------------------------------
+| Operations Center Alert Monitoring
+|--------------------------------------------------------------------------
+|
+| Check operational conditions every minute and create, update,
+| or resolve alerts automatically.
+|
+*/
+
+Schedule::command('operations:monitor')
+    ->everyMinute()
+    ->name('operations.alert-monitoring')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+
+
+
+/*
+|--------------------------------------------------------------------------
 | API Log Cleanup
 |--------------------------------------------------------------------------
 |

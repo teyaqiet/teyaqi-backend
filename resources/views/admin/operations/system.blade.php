@@ -1,26 +1,28 @@
 @extends('admin.layouts.main')
 
-@section('title', 'System Information')
+@section('title', 'Processes')
 
 @section('content')
 
 <div
     class="space-y-6"
-    x-data="operationsSystem()"
+    x-data="operationsProcesses()"
     x-init="init()"
 >
     {{-- Header --}}
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <h1 class="text-2xl font-semibold text-gray-800">
-                System Information
-            </h1>
-            <p class="mt-1 text-sm text-gray-500">
-                Server, runtime, Laravel and resource information.
-            </p>
-        </div>
 
 ```
+    <div>
+        <h1 class="text-2xl font-semibold text-gray-800">
+            Processes
+        </h1>
+
+        <p class="mt-1 text-sm text-gray-500">
+            Monitor currently running processes on the server.
+        </p>
+    </div>
+
     <button
         type="button"
         @click="refresh()"
@@ -34,19 +36,24 @@
 
         <span x-text="loading ? 'Refreshing...' : 'Refresh'"></span>
     </button>
+
 </div>
+
 
 {{-- Error --}}
 <template x-if="error">
+
     <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+
         <div class="flex items-start gap-3">
+
             <div class="mt-0.5 text-red-600">
                 <i class="ik ik-alert-circle"></i>
             </div>
 
             <div>
                 <h3 class="text-sm font-semibold text-red-800">
-                    Unable to load system information
+                    Unable to load processes
                 </h3>
 
                 <p
@@ -54,456 +61,507 @@
                     x-text="error"
                 ></p>
             </div>
+
         </div>
+
     </div>
+
 </template>
+
 
 {{-- Loading --}}
 <template x-if="loading && !loaded">
+
     <div class="rounded-xl bg-white p-10 text-center shadow-sm ring-1 ring-gray-100">
+
         <i class="ik ik-loader animate-spin text-2xl text-primary-600"></i>
 
         <p class="mt-3 text-sm text-gray-500">
-            Loading system information...
+            Loading processes...
         </p>
+
     </div>
+
 </template>
+
 
 <template x-if="loaded">
 
     <div class="space-y-6">
 
-        {{-- Server --}}
+        {{-- Process Overview --}}
         <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+
             <div class="mb-5 flex items-center gap-3">
+
                 <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-                    <i class="ik ik-server text-lg"></i>
+                    <i class="ik ik-cpu text-lg"></i>
                 </div>
 
                 <div>
                     <h2 class="font-semibold text-gray-800">
-                        Server
+                        Process Overview
                     </h2>
 
                     <p class="text-xs text-gray-500">
-                        Host and operating system information
+                        Current process activity on the server
                     </p>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Operating System
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(server.os_family)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        OS Release
-                    </p>
-
-                    <p
-                        class="mt-1 break-words text-sm font-semibold text-gray-800"
-                        x-text="display(server.os_release)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Hostname
-                    </p>
-
-                    <p
-                        class="mt-1 break-words text-sm font-semibold text-gray-800"
-                        x-text="display(server.hostname)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Architecture
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(server.architecture)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4 md:col-span-2">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Server Software
-                    </p>
-
-                    <p
-                        class="mt-1 break-words text-sm font-semibold text-gray-800"
-                        x-text="display(server.server_software)"
-                    ></p>
                 </div>
 
             </div>
-        </div>
 
 
-        {{-- PHP --}}
-        <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <div class="mb-5 flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
-                    <i class="ik ik-code text-lg"></i>
-                </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
 
-                <div>
-                    <h2 class="font-semibold text-gray-800">
-                        PHP Runtime
-                    </h2>
-
-                    <p class="text-xs text-gray-500">
-                        Current PHP runtime configuration
-                    </p>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-
+                {{-- Total --}}
                 <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        PHP Version
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(php.version)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        SAPI
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(php.sapi)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Memory Limit
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(php.memory_limit)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Max Execution Time
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="php.max_execution_time !== undefined ? php.max_execution_time + ' seconds' : '—'"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Upload Max Filesize
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(php.upload_max_filesize)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        POST Max Size
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(php.post_max_size)"
-                    ></p>
-                </div>
-
-            </div>
-        </div>
-
-
-        {{-- Laravel --}}
-        <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <div class="mb-5 flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                    <i class="ik ik-layers text-lg"></i>
-                </div>
-
-                <div>
-                    <h2 class="font-semibold text-gray-800">
-                        Laravel
-                    </h2>
-
-                    <p class="text-xs text-gray-500">
-                        Application framework and environment
-                    </p>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Laravel Version
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(laravel.version)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Environment
-                    </p>
-
-                    <div class="mt-2">
-                        <span
-                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                            :class="environmentClass(laravel.environment)"
-                            x-text="display(laravel.environment)"
-                        ></span>
-                    </div>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Debug Mode
-                    </p>
-
-                    <div class="mt-2">
-                        <span
-                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                            :class="booleanClass(laravel.debug)"
-                            x-text="booleanLabel(laravel.debug)"
-                        ></span>
-                    </div>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Maintenance Mode
-                    </p>
-
-                    <div class="mt-2">
-                        <span
-                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                            :class="laravel.maintenance ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'"
-                            x-text="laravel.maintenance ? 'Enabled' : 'Disabled'"
-                        ></span>
-                    </div>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Timezone
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(laravel.timezone)"
-                    ></p>
-                </div>
-
-                <div class="rounded-lg bg-gray-50 p-4">
-                    <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
-                        Locale
-                    </p>
-
-                    <p
-                        class="mt-1 text-sm font-semibold text-gray-800"
-                        x-text="display(laravel.locale)"
-                    ></p>
-                </div>
-
-            </div>
-        </div>
-
-
-        {{-- Resources --}}
-        <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
-            <div class="mb-5 flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                    <i class="ik ik-bar-chart-2 text-lg"></i>
-                </div>
-
-                <div>
-                    <h2 class="font-semibold text-gray-800">
-                        System Resources
-                    </h2>
-
-                    <p class="text-xs text-gray-500">
-                        Current CPU, memory and disk utilization
-                    </p>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-
-                {{-- CPU --}}
-                <div class="rounded-xl border border-gray-100 p-5">
 
                     <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <i class="ik ik-cpu text-gray-400"></i>
 
-                            <span class="text-sm font-medium text-gray-700">
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Total Processes
+                        </p>
+
+                        <i class="ik ik-list text-gray-400"></i>
+
+                    </div>
+
+                    <p
+                        class="mt-2 text-2xl font-semibold text-gray-800"
+                        x-text="processes.length"
+                    ></p>
+
+                    <p class="mt-1 text-xs text-gray-500">
+                        Processes currently detected
+                    </p>
+
+                </div>
+
+
+                {{-- Top CPU --}}
+                <div class="rounded-lg bg-gray-50 p-4">
+
+                    <div class="flex items-center justify-between">
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Top CPU
+                        </p>
+
+                        <i class="ik ik-activity text-gray-400"></i>
+
+                    </div>
+
+                    <p
+                        class="mt-2 truncate text-lg font-semibold text-gray-800"
+                        x-text="topCpu?.name ?? '—'"
+                    ></p>
+
+                    <p
+                        class="mt-1 text-xs text-gray-500"
+                        x-text="
+                            topCpu?.cpu_percent != null
+                                ? formatPercent(topCpu.cpu_percent)
+                                : 'CPU data unavailable'
+                        "
+                    ></p>
+
+                </div>
+
+
+                {{-- Top Memory --}}
+                <div class="rounded-lg bg-gray-50 p-4">
+
+                    <div class="flex items-center justify-between">
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Top Memory
+                        </p>
+
+                        <i class="ik ik-database text-gray-400"></i>
+
+                    </div>
+
+                    <p
+                        class="mt-2 truncate text-lg font-semibold text-gray-800"
+                        x-text="topMemory?.name ?? '—'"
+                    ></p>
+
+                    <p
+                        class="mt-1 text-xs text-gray-500"
+                        x-text="topMemory ? formatBytes(topMemory.memory_bytes) : '—'"
+                    ></p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        {{-- Running Processes --}}
+        <div class="rounded-xl bg-white shadow-sm ring-1 ring-gray-100">
+
+            {{-- Section Header --}}
+            <div class="border-b border-gray-100 p-6">
+
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                            <i class="ik ik-list text-lg"></i>
+                        </div>
+
+                        <div>
+
+                            <h2 class="font-semibold text-gray-800">
+                                Running Processes
+                            </h2>
+
+                            <p class="text-xs text-gray-500">
+                                Processes detected on the current server
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="flex flex-col gap-2 sm:flex-row">
+
+                        {{-- Search --}}
+                        <div class="relative">
+
+                            <i class="ik ik-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+
+                            <input
+                                type="text"
+                                x-model="search"
+                                placeholder="Search processes..."
+                                class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 sm:w-64"
+                            >
+
+                        </div>
+
+
+                        {{-- Sort --}}
+                        <select
+                            x-model="sort"
+                            @change="refresh()"
+                            class="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                        >
+                            <option value="cpu">
+                                Sort by CPU
+                            </option>
+
+                            <option value="memory">
+                                Sort by Memory
+                            </option>
+
+                            <option value="name">
+                                Sort by Name
+                            </option>
+
+                            <option value="pid">
+                                Sort by PID
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            {{-- Table --}}
+            <div class="overflow-x-auto">
+
+                <table class="min-w-full">
+
+                    <thead class="bg-gray-50">
+
+                        <tr>
+
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+                                Process
+                            </th>
+
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+                                PID
+                            </th>
+
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
                                 CPU
-                            </span>
-                        </div>
+                            </th>
 
-                        <span
-                            class="text-sm font-semibold text-gray-800"
-                            x-text="formatPercent(resources.cpu?.usage_percent)"
-                        ></span>
-                    </div>
-
-                    <div class="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
-                        <div
-                            class="h-full rounded-full bg-primary-600 transition-all duration-500"
-                            :style="`width: ${safePercent(resources.cpu?.usage_percent)}%`"
-                        ></div>
-                    </div>
-
-                    <div class="mt-3 flex justify-between text-xs text-gray-500">
-                        <span>
-                            Cores:
-                            <span
-                                class="font-medium text-gray-700"
-                                x-text="display(resources.cpu?.cores)"
-                            ></span>
-                        </span>
-
-                        <span>
-                            Load:
-                            <span
-                                class="font-medium text-gray-700"
-                                x-text="display(resources.cpu?.load_1m)"
-                            ></span>
-                        </span>
-                    </div>
-
-                </div>
-
-
-                {{-- Memory --}}
-                <div class="rounded-xl border border-gray-100 p-5">
-
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <i class="ik ik-database text-gray-400"></i>
-
-                            <span class="text-sm font-medium text-gray-700">
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
                                 Memory
-                            </span>
-                        </div>
+                            </th>
 
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+                                User
+                            </th>
+
+                            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+                                Status
+                            </th>
+
+                            <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-gray-400">
+                                Action
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody class="divide-y divide-gray-100">
+
+                        <template
+                            x-for="process in filteredProcesses"
+                            :key="process.pid"
+                        >
+
+                            <tr class="transition hover:bg-gray-50">
+
+                                {{-- Process --}}
+                                <td class="px-6 py-4">
+
+                                    <div class="flex min-w-0 items-center gap-3">
+
+                                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
+                                            <span
+                                                class="text-xs font-semibold text-gray-600"
+                                                x-text="process.name ? process.name.charAt(0).toUpperCase() : '?'"
+                                            ></span>
+                                        </div>
+
+                                        <div class="min-w-0">
+
+                                            <p
+                                                class="max-w-xs truncate text-sm font-medium text-gray-800"
+                                                x-text="process.name || 'Unknown'"
+                                            ></p>
+
+                                            <p
+                                                x-show="process.command"
+                                                class="mt-0.5 max-w-md truncate font-mono text-xs text-gray-400"
+                                                x-text="process.command"
+                                            ></p>
+
+                                        </div>
+
+                                    </div>
+
+                                </td>
+
+
+                                {{-- PID --}}
+                                <td class="whitespace-nowrap px-6 py-4">
+
+                                    <span
+                                        class="font-mono text-xs text-gray-600"
+                                        x-text="process.pid ?? '—'"
+                                    ></span>
+
+                                </td>
+
+
+                                {{-- CPU --}}
+                                <td class="whitespace-nowrap px-6 py-4">
+
+                                    <template x-if="process.cpu_percent != null">
+
+                                        <div class="w-24">
+
+                                            <div class="flex items-center justify-between">
+
+                                                <span
+                                                    class="text-xs font-medium text-gray-700"
+                                                    x-text="formatPercent(process.cpu_percent)"
+                                                ></span>
+
+                                            </div>
+
+                                            <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
+
+                                                <div
+                                                    class="h-full rounded-full bg-primary-600 transition-all duration-500"
+                                                    :style="`width: ${safePercent(process.cpu_percent)}%`"
+                                                ></div>
+
+                                            </div>
+
+                                        </div>
+
+                                    </template>
+
+
+                                    <template x-if="process.cpu_percent == null">
+
+                                        <span class="text-xs text-gray-400">
+                                            —
+                                        </span>
+
+                                    </template>
+
+                                </td>
+
+
+                                {{-- Memory --}}
+                                <td class="whitespace-nowrap px-6 py-4">
+
+                                    <div>
+
+                                        <span
+                                            class="text-sm text-gray-700"
+                                            x-text="formatBytes(process.memory_bytes)"
+                                        ></span>
+
+                                        <template x-if="process.memory_percent != null">
+
+                                            <span
+                                                class="ml-1 text-xs text-gray-400"
+                                                x-text="`(${formatPercent(process.memory_percent)})`"
+                                            ></span>
+
+                                        </template>
+
+                                    </div>
+
+                                </td>
+
+
+                                {{-- User --}}
+                                <td class="whitespace-nowrap px-6 py-4">
+
+                                    <span
+                                        class="max-w-[180px] truncate text-sm text-gray-600"
+                                        x-text="process.user || '—'"
+                                    ></span>
+
+                                </td>
+
+
+                                {{-- Status --}}
+                                <td class="whitespace-nowrap px-6 py-4">
+
+                                    <span
+                                        class="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700"
+                                    >
+
+                                        <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+
+                                        <span
+                                            x-text="process.status || 'Running'"
+                                        ></span>
+
+                                    </span>
+
+                                </td>
+
+
+                                {{-- Action --}}
+                                <td class="whitespace-nowrap px-6 py-4 text-right">
+
+                                    <button
+                                        type="button"
+                                        @click="showProcess(process)"
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+                                    >
+
+                                        <i class="ik ik-eye"></i>
+
+                                        Details
+
+                                    </button>
+
+                                </td>
+
+                            </tr>
+
+                        </template>
+
+
+                        {{-- Empty --}}
+                        <template x-if="filteredProcesses.length === 0">
+
+                            <tr>
+
+                                <td
+                                    colspan="7"
+                                    class="px-6 py-12 text-center"
+                                >
+
+                                    <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
+
+                                        <i class="ik ik-search text-gray-300 text-lg"></i>
+
+                                    </div>
+
+                                    <p class="mt-3 text-sm font-medium text-gray-700">
+                                        No processes found
+                                    </p>
+
+                                    <p class="mt-1 text-xs text-gray-400">
+                                        Try changing your search or refreshing the process list.
+                                    </p>
+
+                                </td>
+
+                            </tr>
+
+                        </template>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+
+            {{-- Table Footer --}}
+            <div class="border-t border-gray-100 px-6 py-4">
+
+                <div class="flex flex-col gap-2 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+
+                    <span>
+                        Showing
                         <span
-                            class="text-sm font-semibold text-gray-800"
-                            x-text="formatPercent(resources.memory?.usage_percent)"
+                            class="font-medium text-gray-500"
+                            x-text="filteredProcesses.length"
                         ></span>
-                    </div>
+                        processes
+                    </span>
 
-                    <div class="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
-                        <div
-                            class="h-full rounded-full bg-primary-600 transition-all duration-500"
-                            :style="`width: ${safePercent(resources.memory?.usage_percent)}%`"
-                        ></div>
-                    </div>
-
-                    <div class="mt-3 flex justify-between text-xs text-gray-500">
-                        <span>
-                            Used:
-                            <span
-                                class="font-medium text-gray-700"
-                                x-text="formatBytes(resources.memory?.used)"
-                            ></span>
-                        </span>
-
-                        <span>
-                            Total:
-                            <span
-                                class="font-medium text-gray-700"
-                                x-text="formatBytes(resources.memory?.total)"
-                            ></span>
-                        </span>
-                    </div>
-
-                </div>
-
-
-                {{-- Disk --}}
-                <div class="rounded-xl border border-gray-100 p-5">
-
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <i class="ik ik-hard-drive text-gray-400"></i>
-
-                            <span class="text-sm font-medium text-gray-700">
-                                Disk
-                            </span>
-                        </div>
-
+                    <span>
+                        Platform:
                         <span
-                            class="text-sm font-semibold text-gray-800"
-                            x-text="formatPercent(resources.disk?.usage_percent)"
+                            class="font-medium text-gray-500"
+                            x-text="platform"
                         ></span>
-                    </div>
 
-                    <div class="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
-                        <div
-                            class="h-full rounded-full bg-primary-600 transition-all duration-500"
-                            :style="`width: ${safePercent(resources.disk?.usage_percent)}%`"
-                        ></div>
-                    </div>
+                        <span class="mx-1">•</span>
 
-                    <div class="mt-3 flex justify-between text-xs text-gray-500">
-                        <span>
-                            Free:
-                            <span
-                                class="font-medium text-gray-700"
-                                x-text="formatBytes(resources.disk?.free)"
-                            ></span>
-                        </span>
-
-                        <span>
-                            Total:
-                            <span
-                                class="font-medium text-gray-700"
-                                x-text="formatBytes(resources.disk?.total)"
-                            ></span>
-                        </span>
-                    </div>
+                        Provider:
+                        <span
+                            class="font-medium text-gray-500"
+                            x-text="provider"
+                        ></span>
+                    </span>
 
                 </div>
 
             </div>
+
         </div>
 
 
         {{-- Last Updated --}}
         <div class="flex items-center justify-between text-xs text-gray-400">
+
             <span>
                 Operations Center
             </span>
@@ -515,27 +573,276 @@
                     x-text="lastUpdated || '—'"
                 ></span>
             </span>
+
         </div>
 
     </div>
 
 </template>
+
+
+{{-- Process Details Modal --}}
+<div
+    x-show="showModal"
+    x-cloak
+    class="fixed inset-0 z-50 overflow-y-auto"
+    @keydown.escape.window="closeModal()"
+>
+
+    <div
+        class="fixed inset-0 bg-black/40"
+        @click="closeModal()"
+    ></div>
+
+
+    <div class="relative flex min-h-full items-center justify-center p-4">
+
+        <div
+            x-show="showModal"
+            x-transition
+            @click.stop
+            class="relative w-full max-w-2xl rounded-2xl bg-white shadow-xl"
+        >
+
+            {{-- Header --}}
+            <div class="flex items-center justify-between border-b border-gray-100 px-6 py-5">
+
+                <div>
+
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        Process Details
+                    </h3>
+
+                    <p
+                        class="mt-1 font-mono text-xs text-gray-400"
+                        x-text="selectedProcess ? `PID ${selectedProcess.pid}` : ''"
+                    ></p>
+
+                </div>
+
+
+                <button
+                    type="button"
+                    @click="closeModal()"
+                    class="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                >
+                    <i class="ik ik-x text-lg"></i>
+                </button>
+
+            </div>
+
+
+            {{-- Body --}}
+            <div
+                x-show="selectedProcess"
+                class="max-h-[70vh] space-y-5 overflow-y-auto p-6"
+            >
+
+                {{-- Main --}}
+                <div class="rounded-xl bg-gray-50 p-5">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-white shadow-sm">
+
+                            <span
+                                class="text-sm font-semibold text-gray-600"
+                                x-text="
+                                    selectedProcess?.name
+                                        ? selectedProcess.name.charAt(0).toUpperCase()
+                                        : '?'
+                                "
+                            ></span>
+
+                        </div>
+
+                        <div class="min-w-0">
+
+                            <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                Process
+                            </p>
+
+                            <p
+                                class="mt-1 truncate text-lg font-semibold text-gray-800"
+                                x-text="selectedProcess?.name || 'Unknown'"
+                            ></p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                {{-- Metrics --}}
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                    <div class="rounded-lg bg-gray-50 p-4">
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Process ID
+                        </p>
+
+                        <p
+                            class="mt-1 font-mono text-sm font-semibold text-gray-800"
+                            x-text="selectedProcess?.pid ?? '—'"
+                        ></p>
+
+                    </div>
+
+
+                    <div class="rounded-lg bg-gray-50 p-4">
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Status
+                        </p>
+
+                        <div class="mt-2">
+
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
+
+                                <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+
+                                <span
+                                    x-text="selectedProcess?.status || 'Running'"
+                                ></span>
+
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="rounded-lg bg-gray-50 p-4">
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            CPU Usage
+                        </p>
+
+                        <p
+                            class="mt-1 text-sm font-semibold text-gray-800"
+                            x-text="
+                                selectedProcess?.cpu_percent != null
+                                    ? formatPercent(selectedProcess.cpu_percent)
+                                    : 'Unavailable'
+                            "
+                        ></p>
+
+                    </div>
+
+
+                    <div class="rounded-lg bg-gray-50 p-4">
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Memory Usage
+                        </p>
+
+                        <p
+                            class="mt-1 text-sm font-semibold text-gray-800"
+                            x-text="formatBytes(selectedProcess?.memory_bytes)"
+                        ></p>
+
+                        <p
+                            x-show="selectedProcess?.memory_percent != null"
+                            class="mt-1 text-xs text-gray-400"
+                            x-text="formatPercent(selectedProcess?.memory_percent)"
+                        ></p>
+
+                    </div>
+
+                </div>
+
+
+                {{-- Information --}}
+                <div class="space-y-4">
+
+                    <div>
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            User
+                        </p>
+
+                        <p
+                            class="mt-1 break-words text-sm text-gray-700"
+                            x-text="selectedProcess?.user || 'Unavailable'"
+                        ></p>
+
+                    </div>
+
+
+                    <div>
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Started
+                        </p>
+
+                        <p
+                            class="mt-1 text-sm text-gray-700"
+                            x-text="selectedProcess?.started_at || 'Unavailable'"
+                        ></p>
+
+                    </div>
+
+
+                    <div x-show="selectedProcess?.command">
+
+                        <p class="text-xs font-medium uppercase tracking-wide text-gray-400">
+                            Command
+                        </p>
+
+                        <pre
+                            class="mt-1 max-h-40 overflow-auto rounded-lg bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-600"
+                            x-text="selectedProcess?.command"
+                        ></pre>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            {{-- Footer --}}
+            <div class="flex justify-end border-t border-gray-100 px-6 py-4">
+
+                <button
+                    type="button"
+                    @click="closeModal()"
+                    class="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                >
+                    Close
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
 ```
 
 </div>
 
 <script>
-function operationsSystem() {
+function operationsProcesses() {
     return {
         loading: false,
         loaded: false,
         error: null,
         lastUpdated: null,
 
-        server: {},
-        php: {},
-        laravel: {},
-        resources: {},
+        platform: '—',
+        provider: '—',
+
+        processes: [],
+
+        search: '',
+        sort: 'cpu',
+
+        showModal: false,
+        selectedProcess: null,
 
         async init() {
             await this.refresh();
@@ -546,18 +853,29 @@ function operationsSystem() {
             this.error = null;
 
             try {
-                const response = await fetch('/api/admin/operations/system', {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
+                const params = new URLSearchParams({
+                    limit: '500',
+                    sort: this.sort,
+                    direction: 'desc',
                 });
+
+                const response = await fetch(
+                    `/api/admin/operations/processes?${params.toString()}`,
+                    {
+                        method: 'GET',
+
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+
+                        credentials: 'same-origin',
+                    }
+                );
 
                 if (!response.ok) {
                     throw new Error(
-                        `System information request failed (${response.status})`
+                        `Process request failed (${response.status})`
                     );
                 }
 
@@ -565,40 +883,59 @@ function operationsSystem() {
 
                 if (!json.success) {
                     throw new Error(
-                        json.message || 'Unable to retrieve system information.'
+                        json.message ||
+                        'Unable to retrieve processes.'
                     );
                 }
 
                 const data = json.data || {};
 
-                this.server = data.server || {};
-                this.php = data.php || {};
-                this.laravel = data.laravel || {};
-                this.resources = data.resources || {};
+                this.platform =
+                    data.platform || '—';
 
-                this.lastUpdated = new Date().toLocaleTimeString();
+                this.provider =
+                    data.provider?.provider
+                        ? data.provider.provider
+                            .split('\\')
+                            .pop()
+                        : '—';
+
+                this.processes =
+                    Array.isArray(data.processes)
+                        ? data.processes
+                        : [];
+
+                this.lastUpdated =
+                    new Date().toLocaleTimeString();
+
                 this.loaded = true;
 
             } catch (error) {
-                console.error('Operations System error:', error);
 
-                this.error = error?.message ||
-                    'An unexpected error occurred while loading system information.';
+                console.error(
+                    'Operations Processes error:',
+                    error
+                );
+
+                this.error =
+                    error?.message ||
+                    'An unexpected error occurred while loading processes.';
+
             } finally {
+
                 this.loading = false;
+
             }
         },
 
-        display(value) {
-            if (
-                value === null ||
-                value === undefined ||
-                value === ''
-            ) {
-                return '—';
-            }
+        showProcess(process) {
+            this.selectedProcess = process;
+            this.showModal = true;
+        },
 
-            return value;
+        closeModal() {
+            this.showModal = false;
+            this.selectedProcess = null;
         },
 
         safePercent(value) {
@@ -608,7 +945,10 @@ function operationsSystem() {
                 return 0;
             }
 
-            return Math.min(100, Math.max(0, number));
+            return Math.min(
+                100,
+                Math.max(0, number)
+            );
         },
 
         formatPercent(value) {
@@ -618,7 +958,7 @@ function operationsSystem() {
                 return '—';
             }
 
-            return `${Math.round(number)}%`;
+            return `${number.toFixed(1)}%`;
         },
 
         formatBytes(value) {
@@ -631,7 +971,13 @@ function operationsSystem() {
                 return '—';
             }
 
-            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const units = [
+                'B',
+                'KB',
+                'MB',
+                'GB',
+                'TB'
+            ];
 
             let size = number;
             let unit = 0;
@@ -645,49 +991,69 @@ function operationsSystem() {
             }
 
             return `${size.toFixed(
-                size >= 10 || unit === 0 ? 0 : 1
+                size >= 10 || unit === 0
+                    ? 0
+                    : 1
             )} ${units[unit]}`;
         },
 
-        booleanLabel(value) {
-            if (value === true) {
-                return 'Enabled';
+        get filteredProcesses() {
+
+            const query =
+                this.search
+                    .trim()
+                    .toLowerCase();
+
+            if (!query) {
+                return this.processes;
             }
 
-            if (value === false) {
-                return 'Disabled';
-            }
+            return this.processes.filter(process => {
 
-            return 'Unknown';
+                return (
+                    String(process.name ?? '')
+                        .toLowerCase()
+                        .includes(query)
+
+                    ||
+
+                    String(process.pid ?? '')
+                        .includes(query)
+
+                    ||
+
+                    String(process.user ?? '')
+                        .toLowerCase()
+                        .includes(query)
+                );
+
+            });
         },
 
-        booleanClass(value) {
-            if (value === true) {
-                return 'bg-yellow-100 text-yellow-700';
-            }
+        get topCpu() {
 
-            if (value === false) {
-                return 'bg-green-100 text-green-700';
-            }
+            return [...this.processes]
+                .filter(
+                    process =>
+                        process.cpu_percent != null
+                )
+                .sort(
+                    (a, b) =>
+                        Number(b.cpu_percent) -
+                        Number(a.cpu_percent)
+                )[0] || null;
 
-            return 'bg-gray-100 text-gray-500';
         },
 
-        environmentClass(environment) {
-            switch (String(environment || '').toLowerCase()) {
-                case 'production':
-                    return 'bg-red-100 text-red-700';
+        get topMemory() {
 
-                case 'staging':
-                    return 'bg-yellow-100 text-yellow-700';
+            return [...this.processes]
+                .sort(
+                    (a, b) =>
+                        Number(b.memory_bytes ?? 0) -
+                        Number(a.memory_bytes ?? 0)
+                )[0] || null;
 
-                case 'local':
-                case 'development':
-                    return 'bg-blue-100 text-blue-700';
-
-                default:
-                    return 'bg-gray-100 text-gray-500';
-            }
         },
     };
 }

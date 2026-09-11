@@ -22,6 +22,9 @@ use App\Http\Controllers\Admin\BroadcastController;
 use App\Http\Controllers\Admin\AutomationController;
 use App\Http\Controllers\Admin\AutomationExecutionController;
 
+use App\Http\Controllers\HealthController;
+
+
 use App\Models\Automation;
 
 use App\Services\Automation\AutomationEngine;
@@ -83,58 +86,160 @@ Route::prefix('admin')
             \App\Http\Middleware\EnsureAdminIsActive::class,
         ])->group(function () {
 
-/*
-|--------------------------------------------------------------------------
-| Operations Center
-|--------------------------------------------------------------------------
-*/
 
-Route::prefix('operations')
-    ->name('operations.')
-    ->group(function () {
+            /*
+            |--------------------------------------------------------------------------
+            | Operations Center
+            |--------------------------------------------------------------------------
+            */
 
-        /*
-        |--------------------------------------------------------------------------
-        | Operations Overview
-        |--------------------------------------------------------------------------
-        */
+            Route::prefix('operations')
+                ->name('operations.')
+                ->group(function () {
 
-        Route::view('/', 'admin.operations.index')
-            ->name('index');
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Operations Overview
+                    |--------------------------------------------------------------------------
+                    */
 
-        /*
-        |--------------------------------------------------------------------------
-        | System
-        |--------------------------------------------------------------------------
-        */
+                    Route::view(
+                        '/',
+                        'admin.operations.index'
+                    )->name('index');
 
-        Route::view('/system', 'admin.operations.system')
-            ->name('system');
 
-        Route::view('/queue', 'admin.operations.queue')
-            ->name('queue');
+                    /*
+                    |--------------------------------------------------------------------------
+                    | System Information
+                    |--------------------------------------------------------------------------
+                    */
 
-        Route::view('/cache', 'admin.operations.cache')
-            ->name('cache');
+                    Route::view(
+                        '/system',
+                        'admin.operations.system'
+                    )->name('system');
 
-        Route::view('/database', 'admin.operations.database')
-    ->name('database');
 
-    Route::view('/backups', 'admin.operations.backups')
-    ->name('backups');
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Queue Monitor
+                    |--------------------------------------------------------------------------
+                    */
 
-    Route::view('/deployments', 'admin.operations.deployments')
-    ->name('deployments');
+                    Route::view(
+                        '/queue',
+                        'admin.operations.queue'
+                    )->name('queue');
 
-        /*
-        |--------------------------------------------------------------------------
-        | Audit Logs
-        |--------------------------------------------------------------------------
-        */
 
-        Route::view('/audit-logs', 'admin.operations.audit-logs')
-            ->name('audit-logs');
-    });
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Cache
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::view(
+                        '/cache',
+                        'admin.operations.cache'
+                    )->name('cache');
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Database
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::view(
+                        '/database',
+                        'admin.operations.database'
+                    )->name('database');
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Backups
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::view(
+                        '/backups',
+                        'admin.operations.backups'
+                    )->name('backups');
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Deployments
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::view(
+                        '/deployments',
+                        'admin.operations.deployments'
+                    )->name('deployments');
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Processes
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::get(
+                        '/processes',
+                        function () {
+                            return view(
+                                'admin.operations.processes'
+                            );
+                        }
+                    )->name('processes');
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | System Logs
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::get(
+                        '/logs',
+                        function () {
+                            return view(
+                                'admin.operations.logs'
+                            );
+                        }
+                    )->name('logs');
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Audit Logs
+                    |--------------------------------------------------------------------------
+                    */
+
+                    Route::view(
+                        '/audit-logs',
+                        'admin.operations.audit-logs'
+                    )->name('audit-logs');
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Alerts
+                    |--------------------------------------------------------------------------
+                    */
+                    Route::view(
+                        '/alerts',
+                        'admin.operations.alerts')
+                    ->name('alerts');
+
+
+
+                });
+
+
             /*
             |--------------------------------------------------------------------------
             | Authentication
@@ -338,18 +443,17 @@ Route::prefix('operations')
                 [UserController::class, 'update']
             )->name('users.update');
 
-            Route::delete('/users/{user}', [UserController::class, 'destroy'])
-                ->name('users.destroy');
+            Route::delete(
+                '/users/{user}',
+                [UserController::class, 'destroy']
+            )->name('users.destroy');
 
-            
+
             /*
             |--------------------------------------------------------------------------
             | Bulk User Actions
             |--------------------------------------------------------------------------
             */
-            
-            Route::post('/users/bulk-delete', [UserController::class, 'bulkDelete'])
-                ->name('users.bulk-delete');
 
             Route::post(
                 '/users/bulk-delete',
@@ -459,19 +563,16 @@ Route::prefix('operations')
             |--------------------------------------------------------------------------
             */
 
-            // Export page
             Route::get(
                 '/questions/export',
                 [QuestionExportController::class, 'create']
             )->name('questions.export');
 
-            // Export using filters
             Route::post(
                 '/questions/export',
                 [QuestionExportController::class, 'export']
             )->name('questions.export.download');
 
-            // Export selected questions
             Route::post(
                 '/questions/export-selected',
                 [QuestionExportController::class, 'exportSelected']
@@ -488,8 +589,6 @@ Route::prefix('operations')
                 'questions',
                 QuestionController::class
             );
-
-
 
 
             /*
@@ -575,8 +674,6 @@ Route::prefix('operations')
                 'destroy',
             ]);
 
-            
-
 
             /*
             |--------------------------------------------------------------------------
@@ -659,24 +756,20 @@ Route::prefix('operations')
                 [AutomationController::class, 'index']
             )->name('automations.index');
 
-
             Route::get(
                 '/automations/create',
                 [AutomationController::class, 'create']
             )->name('automations.create');
-
 
             Route::post(
                 '/automations',
                 [AutomationController::class, 'store']
             )->name('automations.store');
 
-
             Route::get(
                 '/automations/{automation}/edit',
                 [AutomationController::class, 'edit']
             )->name('automations.edit');
-
 
             Route::put(
                 '/automations/{automation}/details',
@@ -731,7 +824,6 @@ Route::prefix('operations')
                 [AutomationController::class, 'activate']
             )->name('automations.activate');
 
-
             Route::post(
                 '/automations/{automation}/pause',
                 [AutomationController::class, 'pause']
@@ -761,12 +853,10 @@ Route::prefix('operations')
                 [AutomationExecutionController::class, 'index']
             )->name('automations.executions.index');
 
-
             Route::get(
                 '/automations/{automation}/executions/{execution}',
                 [AutomationExecutionController::class, 'show']
             )->name('automations.executions.show');
-
 
             Route::post(
                 '/automations/{automation}/executions/{execution}/retry',
@@ -809,10 +899,7 @@ Route::prefix('operations')
 
                     return response()->json([
                         'success' => true,
-
-                        'trigger' =>
-                            $type,
-
+                        'trigger' => $type,
                         'execution_ids' =>
                             $executions
                                 ->map(
@@ -820,7 +907,6 @@ Route::prefix('operations')
                                         $execution->execution_id
                                 )
                                 ->values(),
-
                         'count' =>
                             $executions->count(),
                     ]);
@@ -830,27 +916,59 @@ Route::prefix('operations')
         });
 
 
-        Route::get('/debug/npm', function () {
-    $node = 'C:/Program Files/nodejs/node.exe';
+        /*
+        |--------------------------------------------------------------------------
+        | Debug NPM
+        |--------------------------------------------------------------------------
+        */
 
-$process = new \Symfony\Component\Process\Process([
-    $node,
-    '-e',
-    'console.log(process.version); console.log(require("crypto").randomBytes(16).toString("hex"));',
-]);
+        Route::get(
+            '/debug/npm',
+            function () {
 
-$process->setTimeout(30);
+                $node = 'C:/Program Files/nodejs/node.exe';
 
-$process->run();
+                $process = new \Symfony\Component\Process\Process([
+                    $node,
+                    '-e',
+                    'console.log(process.version); console.log(require("crypto").randomBytes(16).toString("hex"));',
+                ]);
 
-return response()->json([
-    'command' => $process->getCommandLine(),
-    'successful' => $process->isSuccessful(),
-    'exit_code' => $process->getExitCode(),
-    'output' => $process->getOutput(),
-    'error' => $process->getErrorOutput(),
-]);
-});
+                $process->setTimeout(30);
+
+                $process->run();
+
+                return response()->json([
+                    'command' =>
+                        $process->getCommandLine(),
+
+                    'successful' =>
+                        $process->isSuccessful(),
+
+                    'exit_code' =>
+                        $process->getExitCode(),
+
+                    'output' =>
+                        $process->getOutput(),
+
+                    'error' =>
+                        $process->getErrorOutput(),
+                ]);
+            }
+        );
 
 
     });
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Public Application Health Check
+|--------------------------------------------------------------------------
+*/
+
+Route::get(
+    '/health',
+    [HealthController::class, 'check']
+)->name('health');

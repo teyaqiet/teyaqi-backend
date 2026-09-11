@@ -9,6 +9,11 @@ use App\Http\Controllers\Admin\Operations\BackupController;
 use App\Http\Controllers\Admin\Operations\BackupDiagnosticController;
 use App\Http\Controllers\Admin\Operations\RollbackController;
 use App\Http\Controllers\Admin\Operations\DeploymentController;
+use App\Http\Controllers\Admin\Operations\ProcessController;
+use App\Http\Controllers\Admin\Operations\LogController;
+use App\Http\Controllers\Admin\Operations\AlertController;
+
+
 use Illuminate\Support\Facades\Route;
 
 Route::middleware([
@@ -30,6 +35,7 @@ Route::middleware([
             'health',
         ])->name('operations.health');
 
+
         /*
         |--------------------------------------------------------------------------
         | Environment
@@ -41,6 +47,7 @@ Route::middleware([
             'environment',
         ])->name('operations.environment');
 
+
         /*
         |--------------------------------------------------------------------------
         | System Information
@@ -51,6 +58,7 @@ Route::middleware([
             OperationsController::class,
             'system',
         ])->name('operations.system');
+
 
         /*
         |--------------------------------------------------------------------------
@@ -69,6 +77,7 @@ Route::middleware([
         ])
             ->whereNumber('id')
             ->name('operations.audit-logs.show');
+
 
         /*
         |--------------------------------------------------------------------------
@@ -109,6 +118,7 @@ Route::middleware([
                     'delete',
                 ])->name('failed.delete');
             });
+
 
         /*
         |--------------------------------------------------------------------------
@@ -151,6 +161,7 @@ Route::middleware([
                 ])->name('clear-all');
             });
 
+
         /*
         |--------------------------------------------------------------------------
         | Database Management
@@ -177,6 +188,7 @@ Route::middleware([
                 ])->name('migrations');
             });
 
+
         /*
         |--------------------------------------------------------------------------
         | Backup Management
@@ -202,12 +214,11 @@ Route::middleware([
                     'create',
                 ])->name('create');
 
-                Route::get('/{id}', [
-                    BackupController::class,
-                    'show',
-                ])
-                    ->whereNumber('id')
-                    ->name('show');
+                /*
+                |--------------------------------------------------------------------------
+                | Important: static routes before /{id}
+                |--------------------------------------------------------------------------
+                */
 
                 Route::get('/{id}/download', [
                     BackupController::class,
@@ -216,13 +227,22 @@ Route::middleware([
                     ->whereNumber('id')
                     ->name('download');
 
+                Route::get('/{id}', [
+                    BackupController::class,
+                    'show',
+                ])
+                    ->whereNumber('id')
+                    ->name('show');
+
                 Route::delete('/{id}', [
                     BackupController::class,
                     'delete',
-                ])->name('delete');
+                ])
+                    ->whereNumber('id')
+                    ->name('delete');
             });
 
-       /*
+
         /*
         |--------------------------------------------------------------------------
         | Deployment Management
@@ -248,6 +268,17 @@ Route::middleware([
                     'preflight',
                 ])->name('preflight');
 
+                /*
+                |--------------------------------------------------------------------------
+                | Static route before /{id}
+                |--------------------------------------------------------------------------
+                */
+
+                Route::get('/lock-status', [
+                    DeploymentController::class,
+                    'lockStatus',
+                ])->name('lock-status');
+
                 Route::get('/{id}', [
                     DeploymentController::class,
                     'show',
@@ -259,35 +290,142 @@ Route::middleware([
                     DeploymentController::class,
                     'deploy',
                 ])->name('create');
-
-                Route::get('/lock-status', [
-                    DeploymentController::class, 'lockStatus'])
-                    ->name('lock-status');
             });
 
 
-            Route::prefix('rollbacks')
-    ->name('operations.rollbacks.')
+        /*
+        |--------------------------------------------------------------------------
+        | Rollbacks
+        |--------------------------------------------------------------------------
+        */
+
+        Route::prefix('rollbacks')
+            ->name('operations.rollbacks.')
+            ->group(function () {
+
+                Route::get('/', [
+                    RollbackController::class,
+                    'index',
+                ])->name('index');
+
+                Route::get('/{id}/preview', [
+                    RollbackController::class,
+                    'preview',
+                ])
+                    ->whereNumber('id')
+                    ->name('preview');
+
+                Route::post('/{id}/create', [
+                    RollbackController::class,
+                    'create',
+                ])
+                    ->whereNumber('id')
+                    ->name('create');
+            });
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Process Management
+        |--------------------------------------------------------------------------
+        */
+
+        Route::prefix('processes')
+            ->name('operations.processes.')
+            ->group(function () {
+
+                Route::get('/', [
+                    ProcessController::class,
+                    'index',
+                ])->name('index');
+
+                Route::get('/overview', [
+                    ProcessController::class,
+                    'overview',
+                ])->name('overview');
+
+                Route::get('/{pid}', [
+                    ProcessController::class,
+                    'show',
+                ])
+                    ->whereNumber('pid')
+                    ->name('show');
+            });
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | System Logs
+        |--------------------------------------------------------------------------
+        */
+
+        Route::prefix('logs')
+            ->name('operations.logs.')
+            ->group(function () {
+
+                Route::get('/', [
+                    LogController::class,
+                    'overview',
+                ])->name('overview');
+
+                Route::get('/entries', [
+                    LogController::class,
+                    'index',
+                ])->name('index');
+
+                Route::post('/clear', [
+                    LogController::class,
+                    'clear',
+                ])->name('clear');
+
+                Route::get('/download', [
+                    LogController::class,
+                    'download',
+                ])->name('download');
+
+                Route::get('/{id}', [
+                    LogController::class,
+                    'show',
+                ])->name('show');
+            });
+
+
+        
+/*
+|--------------------------------------------------------------------------
+| Alerts
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('alerts')
+    ->name('operations.alerts.')
     ->group(function () {
-        Route::get(
-            '/',
-            [RollbackController::class, 'index']
-        )->name('index');
 
-        Route::get(
-            '/{id}/preview',
-            [RollbackController::class, 'preview']
-        )
-            ->whereNumber('id')
-            ->name('preview');
+        Route::get('/', [
+            AlertController::class,
+            'index',
+        ])->name('index');
 
-        Route::post(
-            '/{id}/create',
-            [RollbackController::class, 'create']
-        )
+        Route::get('/{id}', [
+            AlertController::class,
+            'show',
+        ])
             ->whereNumber('id')
-            ->name('create');
+            ->name('show');
+
+        Route::post('/{id}/acknowledge', [
+            AlertController::class,
+            'acknowledge',
+        ])
+            ->whereNumber('id')
+            ->name('acknowledge');
+
+        Route::post('/{id}/resolve', [
+            AlertController::class,
+            'resolve',
+        ])
+            ->whereNumber('id')
+            ->name('resolve');
     });
-    
 
     });

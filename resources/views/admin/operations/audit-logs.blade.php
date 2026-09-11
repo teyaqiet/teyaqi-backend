@@ -16,7 +16,7 @@
                 Audit Logs
             </h1>
 
-```
+
         <p class="mt-1 text-sm text-gray-500">
             Track activity and changes made through the Operations Center.
         </p>
@@ -662,7 +662,6 @@
     </div>
 
 </template>
-```
 
 </div>
 

@@ -16,6 +16,7 @@ return [
             'route' => 'admin.dashboard',
             'active' => 'admin',
             'children' => [
+
                 [
                     'label' => 'Overview',
                     'icon' => 'ik ik-home',
@@ -29,6 +30,7 @@ return [
                     'route' => 'admin.analytics.index',
                     'active' => 'admin/analytics*',
                 ],
+
             ],
         ],
 
@@ -43,14 +45,12 @@ return [
             'heading' => 'Game',
         ],
 
-
         [
             'label' => 'Game Sessions',
             'icon' => 'ik ik-play-circle',
             'route' => 'admin.game-sessions.index',
             'active' => 'admin/game-sessions*',
         ],
-
 
         [
             'label' => 'Challenges',
@@ -59,7 +59,6 @@ return [
             'active' => 'admin/challenges*',
         ],
 
-
         [
             'label' => 'Questions',
             'icon' => 'ik ik-help-circle',
@@ -67,14 +66,12 @@ return [
             'active' => 'admin/questions*',
         ],
 
-
         [
             'label' => 'Categories',
             'icon' => 'ik ik-grid',
             'route' => 'admin.categories.index',
             'active' => 'admin/categories*',
         ],
-
 
         [
             'label' => 'Topics',
@@ -93,7 +90,6 @@ return [
         [
             'heading' => 'Players',
         ],
-
 
         [
             'label' => 'All Players',
@@ -124,6 +120,7 @@ return [
             'route' => 'admin.automations.index',
             'active' => 'admin/automations*',
             'children' => [
+
                 [
                     'label' => 'All Automations',
                     'icon' => 'ik ik-list',
@@ -137,6 +134,7 @@ return [
                     'route' => 'admin.automations.create',
                     'active' => 'admin/automations/create',
                 ],
+
             ],
         ],
 
@@ -151,6 +149,7 @@ return [
             'route' => 'admin.broadcasts.index',
             'active' => 'admin/broadcasts*',
             'children' => [
+
                 [
                     'label' => 'All Broadcasts',
                     'icon' => 'ik ik-list',
@@ -164,6 +163,161 @@ return [
                     'route' => 'admin.broadcasts.create',
                     'active' => 'admin/broadcasts/create',
                 ],
+
+            ],
+        ],
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | OPERATIONS
+        |--------------------------------------------------------------------------
+        */
+
+        [
+            'heading' => 'Operations',
+        ],
+
+
+        [
+            'label' => 'Operations Center',
+            'icon' => 'ik ik-cpu',
+            'route' => 'admin.operations.index',
+            'active' => 'admin/operations*',
+            'children' => [
+
+                /*
+                | Overview
+                */
+
+                [
+                    'label' => 'Overview',
+                    'icon' => 'ik ik-home',
+                    'route' => 'admin.operations.index',
+                    'active' => 'admin/operations',
+                ],
+
+
+                /*
+                | System Information
+                */
+
+                [
+                    'label' => 'System Information',
+                    'icon' => 'ik ik-monitor',
+                    'route' => 'admin.operations.system',
+                    'active' => 'admin/operations/system',
+                ],
+
+
+                /*
+                | Deployments
+                */
+
+                [
+                    'label' => 'Deployments',
+                    'icon' => 'ik ik-upload-cloud',
+                    'route' => 'admin.operations.deployments',
+                    'active' => 'admin/operations/deployments*',
+                ],
+
+
+                /*
+                | Queue Monitor
+                */
+
+                [
+                    'label' => 'Queue Monitor',
+                    'icon' => 'ik ik-layers',
+                    'route' => 'admin.operations.queue',
+                    'active' => 'admin/operations/queue*',
+                ],
+
+
+                /*
+                | System Logs
+                */
+
+                [
+                    'label' => 'System Logs',
+                    'icon' => 'ik ik-file-text',
+                    'route' => 'admin.operations.logs',
+                    'active' => 'admin/operations/logs*',
+                ],
+
+
+                /*
+                | Audit Logs
+                */
+
+                [
+                    'label' => 'Audit Logs',
+                    'icon' => 'ik ik-activity',
+                    'route' => 'admin.operations.audit-logs',
+                    'active' => 'admin/operations/audit-logs*',
+                ],
+
+
+                /*
+                | Database
+                */
+
+                [
+                    'label' => 'Database',
+                    'icon' => 'ik ik-database',
+                    'route' => 'admin.operations.database',
+                    'active' => 'admin/operations/database*',
+                ],
+
+
+                /*
+                | Backups
+                */
+
+                [
+                    'label' => 'Backups',
+                    'icon' => 'ik ik-archive',
+                    'route' => 'admin.operations.backups',
+                    'active' => 'admin/operations/backups*',
+                ],
+
+
+                /*
+                | Cache
+                */
+
+                [
+                    'label' => 'Cache',
+                    'icon' => 'ik ik-zap',
+                    'route' => 'admin.operations.cache',
+                    'active' => 'admin/operations/cache*',
+                ],
+
+
+                /*
+                | Processes
+                */
+
+                [
+                    'label' => 'Processes',
+                    'icon' => 'ik ik-list',
+                    'route' => 'admin.operations.processes',
+                    'active' => 'admin/operations/processes*',
+                ],
+
+                 /*
+                | Alerts
+                */
+
+                [
+                    'label' => 'Alerts',
+                    'icon' => 'ik ik-bell',
+                    'route' => 'admin.operations.alerts',
+                    'active' => 'admin/operations/alerts*',
+                ],
+
+                
+
             ],
         ],
 
@@ -236,6 +390,7 @@ return [
                     'route' => 'admin.system.api-logs.index',
                     'active' => 'admin/system/api-logs*',
                 ],
+
             ],
         ],
 
