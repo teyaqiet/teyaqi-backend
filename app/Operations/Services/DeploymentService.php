@@ -177,46 +177,56 @@ class DeploymentService
         }
 
         /*
-         * ---------------------------------------------------------
-         * NODE / NPM
-         * ---------------------------------------------------------
-         */
+ * ---------------------------------------------------------
+ * NODE / NPM
+ * ---------------------------------------------------------
+ */
 
-        $pipeline = $this->pipelineOverview(
-            $config['pipeline'] ?? []
-        );
+$pipeline = $this->pipelineOverview(
+    $config['pipeline'] ?? []
+);
 
-        if ($pipeline['npm']['enabled'] ?? false) {
-            $nodeCheck = $this->executableCheck(
-                $config['binaries']['node'] ?? 'node',
-                ['--version'],
-                $path
-            );
+if ($pipeline['npm']['enabled'] ?? false) {
+    $nodeCheck = $this->executableCheck(
+        $config['binaries']['node'] ?? 'node',
+        ['--version'],
+        $path,
+        'warning'
+    );
 
-            $checks[] = $nodeCheck;
+    $checks[] = $nodeCheck;
 
-            if ($nodeCheck['status'] === 'failed') {
-                $failed++;
-            }
+    if ($nodeCheck['status'] === 'warning') {
+        $warnings++;
+    }
 
-            $npmCheck = $this->executableCheck(
-                $config['binaries']['npm'] ?? 'npm',
-                ['--version'],
-                $path
-            );
+    if ($nodeCheck['status'] === 'failed') {
+        $failed++;
+    }
 
-            $checks[] = $npmCheck;
+    $npmCheck = $this->executableCheck(
+        $config['binaries']['npm'] ?? 'npm',
+        ['--version'],
+        $path,
+        'warning'
+    );
 
-            if ($npmCheck['status'] === 'failed') {
-                $failed++;
-            }
-        } else {
-            $checks[] = [
-                'name' => 'Node / npm',
-                'status' => 'skipped',
-                'message' => 'Node/npm pipeline step is disabled.',
-            ];
-        }
+    $checks[] = $npmCheck;
+
+    if ($npmCheck['status'] === 'warning') {
+        $warnings++;
+    }
+
+    if ($npmCheck['status'] === 'failed') {
+        $failed++;
+    }
+} else {
+    $checks[] = [
+        'name' => 'Node / npm',
+        'status' => 'skipped',
+        'message' => 'Node/npm pipeline step is disabled for this backend deployment.',
+    ];
+}
 
         /*
          * ---------------------------------------------------------
@@ -2129,45 +2139,48 @@ class DeploymentService
     }
 
     /**
-     * -------------------------------------------------------------
-     * EXECUTABLE CHECK
-     * -------------------------------------------------------------
-     */
-    protected function executableCheck(
-        string $executable,
-        array $arguments = [],
-        ?string $workingDirectory = null
-    ): array {
-        $result = $this->runCommand(
-            array_merge(
-                [$executable],
-                $arguments
-            ),
-            $workingDirectory
-        );
+ * -------------------------------------------------------------
+ * EXECUTABLE CHECK
+ * -------------------------------------------------------------
+ */
+protected function executableCheck(
+    string $executable,
+    array $arguments = [],
+    ?string $workingDirectory = null,
+    string $missingStatus = 'failed'
+): array {
+    $result = $this->runCommand(
+        array_merge(
+            [$executable],
+            $arguments
+        ),
+        $workingDirectory
+    );
 
-        if ($result->successful()) {
-            return [
-                'name' => $executable,
-
-                'status' => 'passed',
-
-                'message' => trim(
-                    $result->output()
-                ),
-            ];
-        }
-
+    if ($result->successful()) {
         return [
             'name' => $executable,
 
-            'status' => 'failed',
+            'status' => 'passed',
 
             'message' => trim(
-                $result->errorOutput()
-            ) ?: "Executable '{$executable}' is not available.",
+                $result->output()
+            ),
         ];
     }
+
+    $message = trim(
+        $result->errorOutput()
+    ) ?: "Executable '{$executable}' is not available.";
+
+    return [
+        'name' => $executable,
+
+        'status' => $missingStatus,
+
+        'message' => $message,
+    ];
+}
 
     /**
      * -------------------------------------------------------------
@@ -2388,60 +2401,125 @@ class DeploymentService
     }
 
     /**
-     * -------------------------------------------------------------
-     * PROCESS ENVIRONMENT
-     * -------------------------------------------------------------
+ * -------------------------------------------------------------
+ * PROCESS ENVIRONMENT
+ * -------------------------------------------------------------
+ */
+protected function processEnvironment(
+    string $path
+): array {
+    $config = $this->config();
+
+    /*
+     * ---------------------------------------------------------
+     * BASE ENVIRONMENT
+     * ---------------------------------------------------------
+     *
+     * Start with the PHP process environment, then allow
+     * deployment-specific variables to override it.
      */
-    protected function processEnvironment(
-        string $path
-    ): array {
-        $config = $this->config();
+    $environment = array_merge(
+        $_ENV,
+        $this->systemEnvironment(),
+        $config['environment_variables'] ?? []
+    );
 
-        $environment =
-            $config['environment_variables']
-            ?? [];
+    /*
+     * ---------------------------------------------------------
+     * COMPOSER
+     * ---------------------------------------------------------
+     *
+     * Composer requires HOME or COMPOSER_HOME.
+     *
+     * The web/queue process does not necessarily inherit the
+     * same shell environment as an SSH session, so explicitly
+     * provide these values.
+     */
+    $environment['HOME'] =
+        $environment['HOME']
+        ?? getenv('HOME')
+        ?? '/home/lememaar';
 
-        /*
-         * Preserve current process environment.
-         */
-        $environment = array_merge(
-            $_ENV,
-            $environment
-        );
+    $environment['COMPOSER_HOME'] =
+        $environment['COMPOSER_HOME']
+        ?? getenv('COMPOSER_HOME')
+        ?? '/home/lememaar/.composer';
 
-        /*
-         * Make Node binaries discoverable if configured.
-         */
-        $node =
-            $config['binaries']['node']
-            ?? null;
+    /*
+     * ---------------------------------------------------------
+     * PATH
+     * ---------------------------------------------------------
+     *
+     * Preserve the server's existing PATH.
+     */
+    $environment['PATH'] =
+        $environment['PATH']
+        ?? getenv('PATH')
+        ?? '/usr/local/bin:/usr/bin:/bin';
 
-        if (
-            is_string($node)
-            && $node !== ''
-            && (
-                str_contains($node, '/')
-                || str_contains($node, '\\')
-            )
-        ) {
-            $nodeDirectory =
-                $this->binaryDirectory($node);
+    /*
+     * ---------------------------------------------------------
+     * NODE BINARY
+     * ---------------------------------------------------------
+     *
+     * If Node is configured using an absolute path, make its
+     * directory available through PATH.
+     */
+    $node =
+        $config['binaries']['node']
+        ?? null;
 
-            if ($nodeDirectory !== '') {
-                $existingPath =
-                    $environment['PATH']
-                    ?? getenv('PATH')
-                    ?? '';
+    if (
+        is_string($node)
+        && $node !== ''
+        && (
+            str_contains($node, '/')
+            || str_contains($node, '\\')
+        )
+    ) {
+        $nodeDirectory =
+            $this->binaryDirectory($node);
 
-                $environment['PATH'] =
-                    $nodeDirectory
-                    . PATH_SEPARATOR
-                    . $existingPath;
-            }
+        if ($nodeDirectory !== '') {
+            $environment['PATH'] =
+                $nodeDirectory
+                . PATH_SEPARATOR
+                . $environment['PATH'];
         }
-
-        return $environment;
     }
+
+    return $environment;
+}
+
+/**
+ * -------------------------------------------------------------
+ * SYSTEM ENVIRONMENT
+ * -------------------------------------------------------------
+ */
+protected function systemEnvironment(): array
+{
+    $environment = [];
+
+    foreach (
+        [
+            'PATH',
+            'HOME',
+            'COMPOSER_HOME',
+            'USER',
+            'SHELL',
+            'LANG',
+            'LC_ALL',
+        ] as $key
+    ) {
+        $value = getenv($key);
+
+        if ($value !== false) {
+            $environment[$key] = $value;
+        }
+    }
+
+    return $environment;
+}
 
     /**
      * -------------------------------------------------------------
