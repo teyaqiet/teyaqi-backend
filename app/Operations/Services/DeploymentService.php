@@ -2415,55 +2415,67 @@ protected function processEnvironment(
      * BASE ENVIRONMENT
      * ---------------------------------------------------------
      *
-     * Start with the PHP process environment, then allow
-     * deployment-specific variables to override it.
+     * Laravel's worker/web process may not inherit the same
+     * environment as an SSH shell.
+     *
+     * Build a controlled environment explicitly.
      */
     $environment = array_merge(
-        $_ENV,
         $this->systemEnvironment(),
-        $config['environment_variables'] ?? []
+        is_array($config['environment_variables'] ?? null)
+            ? $config['environment_variables']
+            : []
     );
 
     /*
      * ---------------------------------------------------------
-     * COMPOSER
+     * HOME
      * ---------------------------------------------------------
      *
-     * Composer requires HOME or COMPOSER_HOME.
-     *
-     * The web/queue process does not necessarily inherit the
-     * same shell environment as an SSH session, so explicitly
-     * provide these values.
+     * Composer requires a valid HOME or COMPOSER_HOME.
      */
-    $environment['HOME'] =
-        $environment['HOME']
-        ?? getenv('HOME')
-        ?? '/home/lememaar';
+    $environment['HOME'] = '/home/lememaar';
 
+    /*
+     * ---------------------------------------------------------
+     * COMPOSER HOME
+     * ---------------------------------------------------------
+     */
     $environment['COMPOSER_HOME'] =
-        $environment['COMPOSER_HOME']
-        ?? getenv('COMPOSER_HOME')
-        ?? '/home/lememaar/.composer';
+        '/home/lememaar/.composer';
 
     /*
      * ---------------------------------------------------------
      * PATH
      * ---------------------------------------------------------
      *
-     * Preserve the server's existing PATH.
+     * Preserve the server PATH, but guarantee the standard
+     * binary locations exist.
      */
-    $environment['PATH'] =
+    $existingPath =
         $environment['PATH']
         ?? getenv('PATH')
-        ?? '/usr/local/bin:/usr/bin:/bin';
+        ?? '';
+
+    $paths = array_filter([
+        '/usr/local/bin',
+        '/usr/bin',
+        '/bin',
+        $existingPath,
+    ]);
+
+    $environment['PATH'] = implode(
+        PATH_SEPARATOR,
+        array_unique($paths)
+    );
 
     /*
      * ---------------------------------------------------------
      * NODE BINARY
      * ---------------------------------------------------------
      *
-     * If Node is configured using an absolute path, make its
-     * directory available through PATH.
+     * If Node is configured using an absolute path, expose its
+     * directory through PATH.
      */
     $node =
         $config['binaries']['node']
@@ -2660,6 +2672,16 @@ protected function systemEnvironment(): array
                     $timeout,
             ]
         );
+
+        Log::debug(
+    'Operations command environment.',
+    [
+        'command' => $command,
+        'HOME' => $environment['HOME'] ?? null,
+        'COMPOSER_HOME' => $environment['COMPOSER_HOME'] ?? null,
+        'PATH' => $environment['PATH'] ?? null,
+    ]
+);
 
         return $process->run(
             $command

@@ -86,38 +86,40 @@ Route::middleware([
         */
 
         Route::prefix('queue')
-            ->name('operations.queue.')
-            ->group(function () {
+    ->name('operations.queue.')
+    ->group(function () {
+        Route::get('/', [QueueController::class, 'overview'])
+            ->name('overview');
 
-                Route::get('/', [
-                    QueueController::class,
-                    'overview',
-                ])->name('overview');
+        Route::get('/pending', [QueueController::class, 'pending'])
+            ->name('pending');
 
-                Route::get('/failed', [
-                    QueueController::class,
-                    'failed',
-                ])->name('failed');
+        Route::get('/pending/{id}', [QueueController::class, 'showPending'])
+            ->whereNumber('id')
+            ->name('pending.show');
 
-                Route::get('/failed/{id}', [
-                    QueueController::class,
-                    'showFailed',
-                ])
-                    ->whereNumber('id')
-                    ->name('failed.show');
+        Route::get('/jobs', [QueueController::class, 'jobs'])
+            ->name('jobs');
 
-                Route::post('/failed/{id}/retry', [
-                    QueueController::class,
-                    'retry',
-                ])
-                    ->whereNumber('id')
-                    ->name('failed.retry');
+        Route::get('/jobs/{id}', [QueueController::class, 'showJob'])
+            ->whereNumber('id')
+            ->name('jobs.show');
 
-                Route::delete('/failed/{id}', [
-                    QueueController::class,
-                    'delete',
-                ])->name('failed.delete');
-            });
+        Route::get('/failed', [QueueController::class, 'failed'])
+            ->name('failed');
+
+        Route::get('/failed/{id}', [QueueController::class, 'showFailed'])
+            ->whereNumber('id')
+            ->name('failed.show');
+
+        Route::post('/failed/{id}/retry', [QueueController::class, 'retry'])
+            ->whereNumber('id')
+            ->name('failed.retry');
+
+        Route::delete('/failed/{id}', [QueueController::class, 'delete'])
+            ->whereNumber('id')
+            ->name('failed.delete');
+    });
 
 
         /*
