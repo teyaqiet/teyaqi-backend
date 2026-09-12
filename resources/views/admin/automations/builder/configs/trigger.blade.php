@@ -17,20 +17,20 @@
             </span>
 
             <select
-    x-model="getSelectedNode().config.event"
-    @change="markDirty()"
-    class="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-sm text-gray-800 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
->
-    <option value="">
-        Select an event
-    </option>
+                x-model="getSelectedNode().config.event"
+                @change="markDirty()"
+                class="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-sm text-gray-800 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+                <option value="">
+                    Select an event
+                </option>
 
-    @foreach ($automationTriggers as $type => $trigger)
-        <option value="{{ $type }}">
-            {{ $trigger['label'] }}
-        </option>
-    @endforeach
-</select>
+                @foreach ($automationTriggers as $type => $trigger)
+                    <option value="{{ $type }}">
+                        {{ $trigger['label'] }}
+                    </option>
+                @endforeach
+            </select>
 
             <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
                 <i class="ik ik-chevron-down"></i>
@@ -39,7 +39,7 @@
         </div>
 
         <p class="mt-1.5 text-xs text-gray-400">
-            Choose the game event that should start this automation.
+            Choose the event that should start this automation.
         </p>
 
     </div>
@@ -73,7 +73,7 @@
 
                 <div class="mt-1 text-xs leading-5 text-indigo-700">
                     This automation will start automatically when the selected
-                    event is dispatched by the Teyaqi game system.
+                    event is dispatched by the Teyaqi system.
                 </div>
 
             </div>

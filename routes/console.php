@@ -24,6 +24,7 @@ Schedule::command(
     'streaks:reset-expired'
 )->dailyAt('00:00');
 
+
 /*
 |--------------------------------------------------------------------------
 | Broadcast Recovery
@@ -40,6 +41,10 @@ Schedule::job(
     ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('players:dispatch-inactivity')
+    ->hourly()
+    ->withoutOverlapping();
 
 /*
 |--------------------------------------------------------------------------

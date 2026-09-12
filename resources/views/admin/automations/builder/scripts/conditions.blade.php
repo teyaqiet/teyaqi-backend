@@ -111,6 +111,30 @@ function automationBuilderConditions() {
 
                 ],
 
+                date: [
+
+                    {
+                        value: 'equals',
+                        label: 'Is',
+                    },
+
+                    {
+                        value: 'not_equals',
+                        label: 'Is Not',
+                    },
+
+                    {
+                        value: 'greater_than',
+                        label: 'After',
+                    },
+
+                    {
+                        value: 'less_than',
+                        label: 'Before',
+                    },
+
+                ],
+
             },
 
 
@@ -302,6 +326,50 @@ function automationBuilderConditions() {
                 {
                     value: 'trigger.data.milestone',
                     label: 'XP Milestone',
+                    type: 'number',
+                },
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | Player Inactive / Player Returned
+                |--------------------------------------------------------------------------
+                */
+
+                {
+                    value: 'trigger.data.days_inactive',
+                    label: 'Days Inactive',
+                    type: 'number',
+                },
+
+                {
+                    value: 'trigger.data.previous_streak',
+                    label: 'Previous Streak',
+                    type: 'number',
+                },
+
+                {
+                    value: 'trigger.data.last_activity_at',
+                    label: 'Last Activity',
+                    type: 'date',
+                },
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | Streak At Risk
+                |--------------------------------------------------------------------------
+                */
+
+                {
+                    value: 'trigger.data.current_streak',
+                    label: 'Current Streak',
+                    type: 'number',
+                },
+
+                {
+                    value: 'trigger.data.hours_remaining',
+                    label: 'Hours Remaining',
                     type: 'number',
                 },
 
@@ -646,6 +714,12 @@ function automationBuilderConditions() {
 
             }
 
+            if (type === 'date') {
+
+                return 'Select a date and time to compare against.';
+
+            }
+
             return 'Enter the value that should be compared.';
 
         },
@@ -729,6 +803,25 @@ function automationBuilderConditions() {
                 this.getConditionFieldType(
                     fieldValue
                 ) === 'boolean'
+            );
+
+        },
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DATE FIELD
+        |--------------------------------------------------------------------------
+        */
+
+        isDateConditionField(
+            fieldValue = null
+        ) {
+
+            return (
+                this.getConditionFieldType(
+                    fieldValue
+                ) === 'date'
             );
 
         },

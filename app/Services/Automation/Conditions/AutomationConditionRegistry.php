@@ -9,90 +9,90 @@ class AutomationConditionRegistry
      */
     protected array $operators = [
 
-    'number' => [
-        [
-            'value' => 'equals',
-            'label' => 'Equals',
+        'number' => [
+            [
+                'value' => 'equals',
+                'label' => 'Equals',
+            ],
+            [
+                'value' => 'not_equals',
+                'label' => 'Not Equals',
+            ],
+            [
+                'value' => 'greater_than',
+                'label' => 'Greater Than',
+            ],
+            [
+                'value' => 'greater_than_or_equal',
+                'label' => 'Greater Than or Equal',
+            ],
+            [
+                'value' => 'less_than',
+                'label' => 'Less Than',
+            ],
+            [
+                'value' => 'less_than_or_equal',
+                'label' => 'Less Than or Equal',
+            ],
         ],
-        [
-            'value' => 'not_equals',
-            'label' => 'Not Equals',
-        ],
-        [
-            'value' => 'greater_than',
-            'label' => 'Greater Than',
-        ],
-        [
-            'value' => 'greater_than_or_equal',
-            'label' => 'Greater Than or Equal',
-        ],
-        [
-            'value' => 'less_than',
-            'label' => 'Less Than',
-        ],
-        [
-            'value' => 'less_than_or_equal',
-            'label' => 'Less Than or Equal',
-        ],
-    ],
 
-    'string' => [
-        [
-            'value' => 'equals',
-            'label' => 'Equals',
+        'string' => [
+            [
+                'value' => 'equals',
+                'label' => 'Equals',
+            ],
+            [
+                'value' => 'not_equals',
+                'label' => 'Not Equals',
+            ],
+            [
+                'value' => 'contains',
+                'label' => 'Contains',
+            ],
+            [
+                'value' => 'not_contains',
+                'label' => 'Does Not Contain',
+            ],
+            [
+                'value' => 'is_empty',
+                'label' => 'Is Empty',
+            ],
+            [
+                'value' => 'is_not_empty',
+                'label' => 'Is Not Empty',
+            ],
         ],
-        [
-            'value' => 'not_equals',
-            'label' => 'Not Equals',
-        ],
-        [
-            'value' => 'contains',
-            'label' => 'Contains',
-        ],
-        [
-            'value' => 'not_contains',
-            'label' => 'Does Not Contain',
-        ],
-        [
-            'value' => 'is_empty',
-            'label' => 'Is Empty',
-        ],
-        [
-            'value' => 'is_not_empty',
-            'label' => 'Is Not Empty',
-        ],
-    ],
 
-    'boolean' => [
-        [
-            'value' => 'equals',
-            'label' => 'Equals',
+        'boolean' => [
+            [
+                'value' => 'equals',
+                'label' => 'Equals',
+            ],
+            [
+                'value' => 'not_equals',
+                'label' => 'Not Equals',
+            ],
         ],
-        [
-            'value' => 'not_equals',
-            'label' => 'Not Equals',
-        ],
-    ],
 
-    'date' => [
-        [
-            'value' => 'equals',
-            'label' => 'Is',
+        'date' => [
+            [
+                'value' => 'equals',
+                'label' => 'Is',
+            ],
+            [
+                'value' => 'not_equals',
+                'label' => 'Is Not',
+            ],
+            [
+                'value' => 'greater_than',
+                'label' => 'After',
+            ],
+            [
+                'value' => 'less_than',
+                'label' => 'Before',
+            ],
         ],
-        [
-            'value' => 'not_equals',
-            'label' => 'Is Not',
-        ],
-        [
-            'value' => 'greater_than',
-            'label' => 'After',
-        ],
-        [
-            'value' => 'less_than',
-            'label' => 'Before',
-        ],
-    ],
-];
+    ];
 
 
     /**
@@ -311,96 +311,75 @@ class AutomationConditionRegistry
                 ],
             ],
 
+
             /*
-|--------------------------------------------------------------------------
-| Player Inactive
-|--------------------------------------------------------------------------
-*/
+            |--------------------------------------------------------------------------
+            | Player Inactive / Player Returned
+            |--------------------------------------------------------------------------
+            |
+            | These fields are shared because both retention events carry
+            | days_inactive and previous_streak.
+            |
+            */
 
-'trigger.data.days_inactive' => [
-    'label' => 'Days Inactive',
-    'group' => 'Retention',
-    'type' => 'number',
-    'description' => 'Number of consecutive days the player has been inactive.',
-    'triggers' => [
-        'player_inactive',
-    ],
-],
+            'trigger.data.days_inactive' => [
+                'label' => 'Days Inactive',
+                'group' => 'Retention',
+                'type' => 'number',
+                'description' => 'Number of days the player was inactive.',
+                'triggers' => [
+                    'player_inactive',
+                    'player_returned',
+                ],
+            ],
 
-'trigger.data.previous_streak' => [
-    'label' => 'Previous Streak',
-    'group' => 'Retention',
-    'type' => 'number',
-    'description' => 'The player streak before becoming inactive.',
-    'triggers' => [
-        'player_inactive',
-    ],
-],
+            'trigger.data.previous_streak' => [
+                'label' => 'Previous Streak',
+                'group' => 'Retention',
+                'type' => 'number',
+                'description' => 'The player streak before the period of inactivity.',
+                'triggers' => [
+                    'player_inactive',
+                    'player_returned',
+                ],
+            ],
 
-'trigger.data.last_activity_at' => [
-    'label' => 'Last Activity',
-    'group' => 'Retention',
-    'type' => 'date',
-    'description' => 'The date and time of the player’s last activity.',
-    'triggers' => [
-        'player_inactive',
-    ],
-],
-
-
-/*
-|--------------------------------------------------------------------------
-| Player Returned
-|--------------------------------------------------------------------------
-*/
-
-'trigger.data.days_inactive' => [
-    'label' => 'Days Inactive',
-    'group' => 'Retention',
-    'type' => 'number',
-    'description' => 'Number of days the player was inactive before returning.',
-    'triggers' => [
-        'player_returned',
-    ],
-],
-
-'trigger.data.previous_streak' => [
-    'label' => 'Previous Streak',
-    'group' => 'Retention',
-    'type' => 'number',
-    'description' => 'The player streak before the period of inactivity.',
-    'triggers' => [
-        'player_returned',
-    ],
-],
+            'trigger.data.last_activity_at' => [
+                'label' => 'Last Activity',
+                'group' => 'Retention',
+                'type' => 'date',
+                'description' => 'The date and time of the player’s last Daily Challenge activity.',
+                'triggers' => [
+                    'player_inactive',
+                ],
+            ],
 
 
-/*
-|--------------------------------------------------------------------------
-| Streak At Risk
-|--------------------------------------------------------------------------
-*/
+            /*
+            |--------------------------------------------------------------------------
+            | Streak At Risk
+            |--------------------------------------------------------------------------
+            */
 
-'trigger.data.current_streak' => [
-    'label' => 'Current Streak',
-    'group' => 'Retention',
-    'type' => 'number',
-    'description' => 'The player streak that is currently at risk.',
-    'triggers' => [
-        'streak_at_risk',
-    ],
-],
+            'trigger.data.current_streak' => [
+                'label' => 'Current Streak',
+                'group' => 'Retention',
+                'type' => 'number',
+                'description' => 'The player streak that is currently at risk.',
+                'triggers' => [
+                    'streak_at_risk',
+                ],
+            ],
 
-'trigger.data.hours_remaining' => [
-    'label' => 'Hours Remaining',
-    'group' => 'Retention',
-    'type' => 'number',
-    'description' => 'Number of hours remaining before the player loses the streak.',
-    'triggers' => [
-        'streak_at_risk',
-    ],
-],
-
+            'trigger.data.hours_remaining' => [
+                'label' => 'Hours Remaining',
+                'group' => 'Retention',
+                'type' => 'number',
+                'description' => 'Number of hours remaining before the player loses the streak.',
+                'triggers' => [
+                    'streak_at_risk',
+                ],
+            ],
 
         ];
     }
@@ -427,18 +406,18 @@ class AutomationConditionRegistry
     /**
      * Get operators for a field.
      */
-   public function operators(string $field): array
-{
-    $definition = $this->get($field);
+    public function operators(string $field): array
+    {
+        $definition = $this->get($field);
 
-    if (!$definition) {
-        return [];
+        if (!$definition) {
+            return [];
+        }
+
+        return $this->operators[
+            $definition['type'] ?? 'string'
+        ] ?? [];
     }
-
-    return $this->operators[
-        $definition['type'] ?? 'string'
-    ] ?? [];
-}
 
 
     /**

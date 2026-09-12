@@ -1,23 +1,49 @@
 <?php
 
-
 namespace App\Services\Automation;
 
+use App\Services\Automation\Conditions\AutomationConditionRegistry;
 use App\Services\Automation\Nodes\ConditionNode;
 use App\Services\Automation\Nodes\DelayNode;
 use App\Services\Automation\Nodes\EndNode;
 use App\Services\Automation\Nodes\TelegramMessageNode;
 use App\Services\Automation\Nodes\TriggerNode;
+use App\Services\Automation\Triggers\AutomationTriggerRegistry;
 use RuntimeException;
 
 class NodeRegistry
 {
     /**
+     * Actual node handler classes.
+     *
+     * @var array<string, class-string>
+     */
+    protected array $handlers = [
+        'trigger' => TriggerNode::class,
+        'condition' => ConditionNode::class,
+        'telegram_message' => TelegramMessageNode::class,
+        'delay' => DelayNode::class,
+        'end' => EndNode::class,
+    ];
+
+    /**
      * Automation node definitions.
+     *
+     * NodeRegistry defines the structure of nodes.
+     *
+     * Business-specific trigger/condition definitions should come from:
+     * - AutomationTriggerRegistry
+     * - AutomationConditionRegistry
      *
      * @var array<string, array>
      */
     protected array $nodes = [
+
+        /*
+        |--------------------------------------------------------------------------
+        | Trigger
+        |--------------------------------------------------------------------------
+        */
 
         'trigger' => [
             'component' => 'trigger',
@@ -30,6 +56,7 @@ class NodeRegistry
 
             'handles' => [
                 'inputs' => [],
+
                 'outputs' => [
                     [
                         'id' => 'output',
@@ -40,35 +67,40 @@ class NodeRegistry
 
             'config' => [
 
-    'event' => [
-        'type' => 'select',
-        'label' => 'Trigger Event',
-        'required' => true,
-        'options' => [
-            'streak_reached' => 'Streak Reached',
-            'level_up' => 'Level Up',
-            'xp_milestone' => 'XP Milestone',
-            'lives_low' => 'Lives Low',
-            'player_registered' => 'Player Registered',
+                'event' => [
+                    'type' => 'select',
+                    'label' => 'Trigger Event',
+                    'required' => true,
+
+                    /*
+                     * Options are injected from AutomationTriggerRegistry
+                     * in the constructor.
+                     */
+                    'options' => [],
+                ],
+
+                'description' => [
+                    'type' => 'textarea',
+                    'label' => 'Description',
+                    'required' => false,
+                    'placeholder' => 'Describe what should start this automation...',
+                ],
+
+                'enabled' => [
+                    'type' => 'boolean',
+                    'label' => 'Enabled',
+                    'required' => false,
+                    'default' => true,
+                ],
+
+            ],
         ],
-    ],
 
-    'description' => [
-        'type' => 'textarea',
-        'label' => 'Description',
-        'required' => false,
-        'placeholder' => 'Describe what should start this automation...',
-    ],
-
-    'enabled' => [
-        'type' => 'boolean',
-        'label' => 'Enabled',
-        'required' => false,
-        'default' => true,
-    ],
-
-],
-        ],
+        /*
+        |--------------------------------------------------------------------------
+        | Condition
+        |--------------------------------------------------------------------------
+        */
 
         'condition' => [
             'component' => 'condition',
@@ -101,59 +133,49 @@ class NodeRegistry
 
             'config' => [
 
-    'field' => [
-        'type' => 'select',
-        'label' => 'Field',
-        'required' => true,
-        'options' => [
-            'name' => 'Player Name',
-            'xp' => 'Total XP',
-            'streak' => 'Current Streak',
-            'current_streak' => 'Current Streak',
-            'best_streak' => 'Best Streak',
-            'sr' => 'Skill Rating',
-            'level' => 'Level',
-            'lives' => 'Lives',
-            'telegram_id' => 'Telegram ID',
-            'username' => 'Username',
-            'trigger.type' => 'Trigger Type',
-            'trigger.data.streak' => 'Trigger Streak',
+                'field' => [
+                    'type' => 'select',
+                    'label' => 'Field',
+                    'required' => true,
+
+                    /*
+                     * Populated from AutomationConditionRegistry.
+                     */
+                    'options' => [],
+                ],
+
+                'operator' => [
+                    'type' => 'select',
+                    'label' => 'Operator',
+                    'required' => true,
+
+                    /*
+                     * Populated from AutomationConditionRegistry.
+                     */
+                    'options' => [],
+                ],
+
+                'value' => [
+                    'type' => 'text',
+                    'label' => 'Value',
+                    'required' => false,
+                ],
+
+                'case_sensitive' => [
+                    'type' => 'boolean',
+                    'label' => 'Case Sensitive',
+                    'required' => false,
+                    'default' => false,
+                ],
+
+            ],
         ],
-    ],
 
-    'operator' => [
-        'type' => 'select',
-        'label' => 'Operator',
-        'required' => true,
-        'options' => [
-            'equals' => 'Equals',
-            'not_equals' => 'Not Equals',
-            'greater_than' => 'Greater Than',
-            'greater_than_or_equal' => 'Greater Than or Equal',
-            'less_than' => 'Less Than',
-            'less_than_or_equal' => 'Less Than or Equal',
-            'contains' => 'Contains',
-            'not_contains' => 'Does Not Contain',
-            'is_empty' => 'Is Empty',
-            'is_not_empty' => 'Is Not Empty',
-        ],
-    ],
-
-    'value' => [
-        'type' => 'text',
-        'label' => 'Value',
-        'required' => false,
-    ],
-
-    'case_sensitive' => [
-        'type' => 'boolean',
-        'label' => 'Case Sensitive',
-        'required' => false,
-        'default' => false,
-    ],
-
-],
-        ],
+        /*
+        |--------------------------------------------------------------------------
+        | Telegram Message
+        |--------------------------------------------------------------------------
+        */
 
         'telegram_message' => [
             'component' => 'telegram_message',
@@ -182,60 +204,68 @@ class NodeRegistry
 
             'config' => [
 
-    'recipient' => [
-        'type' => 'select',
-        'label' => 'Recipient',
-        'required' => true,
-        'default' => 'context.telegram_id',
-        'options' => [
-            'context.telegram_id' => 'Current Player',
-            'config.chat_id' => 'Custom Chat ID',
+                'recipient' => [
+                    'type' => 'select',
+                    'label' => 'Recipient',
+                    'required' => true,
+                    'default' => 'context.telegram_id',
+
+                    'options' => [
+                        'context.telegram_id' => 'Current Player',
+                        'config.chat_id' => 'Custom Chat ID',
+                    ],
+                ],
+
+                'chat_id' => [
+                    'type' => 'text',
+                    'label' => 'Chat ID',
+                    'required' => false,
+                    'placeholder' => 'Telegram chat ID',
+                ],
+
+                'message' => [
+                    'type' => 'textarea',
+                    'label' => 'Message',
+                    'required' => true,
+                    'placeholder' => '🔥 Hey @{{name}}! You reached a @{{streak}} day streak!',
+                ],
+
+                'parse_mode' => [
+                    'type' => 'select',
+                    'label' => 'Parse Mode',
+                    'required' => false,
+                    'default' => 'HTML',
+
+                    'options' => [
+                        '' => 'Plain Text',
+                        'HTML' => 'HTML',
+                        'Markdown' => 'Markdown',
+                        'MarkdownV2' => 'Markdown V2',
+                    ],
+                ],
+
+                'disable_web_page_preview' => [
+                    'type' => 'boolean',
+                    'label' => 'Disable Link Preview',
+                    'required' => false,
+                    'default' => false,
+                ],
+
+                'disable_notification' => [
+                    'type' => 'boolean',
+                    'label' => 'Silent Notification',
+                    'required' => false,
+                    'default' => false,
+                ],
+
+            ],
         ],
-    ],
 
-    'chat_id' => [
-        'type' => 'text',
-        'label' => 'Chat ID',
-        'required' => false,
-        'placeholder' => 'Telegram chat ID',
-    ],
-
-    'message' => [
-        'type' => 'textarea',
-        'label' => 'Message',
-        'required' => true,
-        'placeholder' => '🔥 Hey @{{name}}! You reached a @{{streak}} day streak!',
-    ],
-
-    'parse_mode' => [
-        'type' => 'select',
-        'label' => 'Parse Mode',
-        'required' => false,
-        'default' => 'HTML',
-        'options' => [
-            '' => 'Plain Text',
-            'HTML' => 'HTML',
-            'Markdown' => 'Markdown',
-            'MarkdownV2' => 'Markdown V2',
-        ],
-    ],
-
-    'disable_web_page_preview' => [
-        'type' => 'boolean',
-        'label' => 'Disable Link Preview',
-        'required' => false,
-        'default' => false,
-    ],
-
-    'disable_notification' => [
-        'type' => 'boolean',
-        'label' => 'Silent Notification',
-        'required' => false,
-        'default' => false,
-    ],
-
-],
-        ],
+        /*
+        |--------------------------------------------------------------------------
+        | Delay
+        |--------------------------------------------------------------------------
+        */
 
         'delay' => [
             'component' => 'delay',
@@ -263,6 +293,7 @@ class NodeRegistry
             ],
 
             'config' => [
+
                 'duration' => [
                     'type' => 'number',
                     'label' => 'Duration',
@@ -275,14 +306,22 @@ class NodeRegistry
                     'label' => 'Unit',
                     'required' => true,
                     'default' => 'seconds',
+
                     'options' => [
                         'seconds' => 'Seconds',
                         'minutes' => 'Minutes',
                         'hours' => 'Hours',
                     ],
                 ],
+
             ],
         ],
+
+        /*
+        |--------------------------------------------------------------------------
+        | End
+        |--------------------------------------------------------------------------
+        */
 
         'end' => [
             'component' => 'end',
@@ -308,19 +347,79 @@ class NodeRegistry
         ],
     ];
 
+    /**
+     * Inject the source-of-truth registries.
+     */
+    public function __construct(
+        protected AutomationTriggerRegistry $triggerRegistry,
+        protected AutomationConditionRegistry $conditionRegistry,
+    ) {
+        $this->hydrateRegistryOptions();
+    }
 
     /**
-     * Actual handler classes.
-     *
-     * @var array<string, class-string>
+     * Populate node configuration options from the
+     * dedicated registries.
      */
-    protected array $handlers = [
-        'trigger' => TriggerNode::class,
-        'condition' => ConditionNode::class,
-        'telegram_message' => TelegramMessageNode::class,
-        'delay' => DelayNode::class,
-        'end' => EndNode::class,
-    ];
+    protected function hydrateRegistryOptions(): void
+    {
+        /*
+        |--------------------------------------------------------------------------
+        | Trigger options
+        |--------------------------------------------------------------------------
+        */
+
+        $triggerOptions = [];
+
+        foreach ($this->triggerRegistry->all() as $type => $trigger) {
+            $triggerOptions[$type] = $trigger['label'] ?? $type;
+        }
+
+        $this->nodes['trigger']['config']['event']['options'] = $triggerOptions;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Condition options
+        |--------------------------------------------------------------------------
+        */
+
+        $conditionDefinitions = $this->conditionRegistry->all();
+
+        /*
+         * The condition registry owns the actual fields.
+         */
+        $fieldOptions = [];
+
+        foreach (($conditionDefinitions['fields'] ?? []) as $field) {
+            if (!isset($field['value'])) {
+                continue;
+            }
+
+            $fieldOptions[$field['value']] =
+                $field['label'] ?? $field['value'];
+        }
+
+        /*
+         * The condition registry owns the actual operators.
+         */
+        $operatorOptions = [];
+
+        foreach (($conditionDefinitions['operators'] ?? []) as $type => $operators) {
+            foreach ($operators as $operator) {
+                if (!isset($operator['value'])) {
+                    continue;
+                }
+
+                $operatorOptions[$operator['value']] =
+                    $operator['label'] ?? $operator['value'];
+            }
+        }
+
+        $this->nodes['condition']['config']['field']['options'] = $fieldOptions;
+
+        $this->nodes['condition']['config']['operator']['options'] = $operatorOptions;
+    }
 
 
     /**
